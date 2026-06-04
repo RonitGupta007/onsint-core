@@ -1165,3 +1165,37 @@ select:focus {
         grid-template-columns: 1fr;
     }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   CONNECTION GRAPH STYLES
+   ───────────────────────────────────────────────────────────── */
+.graph-data-frame {
+    display: none;
+    animation: fadeIn var(--transition-normal);
+}
+
+#network-graph {
+    background: radial-gradient(circle, rgba(15, 23, 42, 0.4) 0%, rgba(7, 10, 19, 0.7) 100%);
+    cursor: grab;
+}
+
+#network-graph:active {
+    cursor: grabbing;
+}
+
+/* Custom styles for vis.js tooltips to match dashboard */
+.vis-tooltip {
+    position: absolute;
+    visibility: hidden;
+    padding: 8px 12px;
+    font-family: var(--font-sans) !important;
+    font-size: 0.8rem !important;
+    font-weight: 500;
+    color: var(--text-main) !important;
+    background: rgba(10, 15, 30, 0.9) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 6px !important;
+    box-shadow: var(--shadow-md) !important;
+    z-index: 1000;
+}
+

@@ -365,6 +365,153 @@ def footprint_scan(payload: ScanInput):
                     
     return {"results": results, "scanned_count": len(platforms_to_scan)}
 
+
+# --- Case Relation Graph API ---
+
+@app.get("/api/cases/{case_name}/graph")
+def get_case_graph(case_name: str):
+    findings = get_findings_db(case_name)
+    nodes = []
+    edges = []
+    
+    # Root node is the case
+    nodes.append({
+        "id": "case_root",
+        "label": f"📂 Case: {case_name}",
+        "group": "case",
+        "title": f"Investigation Case File: {case_name}"
+    })
+    
+    # Track unique items to prevent duplicate nodes
+    added_nodes = {"case_root"}
+    
+    for f in findings:
+        cat = f["category"]
+        lbl = f["label"]
+        val = f["value"]
+        
+        if cat == "Instagram Metadata" and lbl == "Permanent UserID":
+            target_node = "ig_target"
+            if target_node not in added_nodes:
+                nodes.append({
+                    "id": target_node,
+                    "label": "📸 Target Profile",
+                    "group": "target",
+                    "title": "Primary Target Instagram Account"
+                })
+                edges.append({"from": "case_root", "to": target_node, "label": "investigates"})
+                added_nodes.add(target_node)
+                
+            uid_node = f"uid_{val}"
+            if uid_node not in added_nodes:
+                nodes.append({
+                    "id": uid_node,
+                    "label": f"🆔 UID: {val}",
+                    "group": "uid",
+                    "title": f"Permanent numerical ID: {val}"
+                })
+                edges.append({"from": target_node, "to": uid_node, "label": "resolves"})
+                added_nodes.add(uid_node)
+                
+        elif cat == "Cross Platform Profile":
+            target_node = "ig_target"
+            if target_node not in added_nodes:
+                nodes.append({
+                    "id": target_node,
+                    "label": "📸 Target Profile",
+                    "group": "target",
+                    "title": "Primary Target Instagram Account"
+                })
+                edges.append({"from": "case_root", "to": target_node, "label": "investigates"})
+                added_nodes.add(target_node)
+                
+            platform_node = f"plat_{lbl}"
+            if platform_node not in added_nodes:
+                nodes.append({
+                    "id": platform_node,
+                    "label": f"🌐 {lbl}",
+                    "group": "platform",
+                    "title": f"Active URL: {val}"
+                })
+                edges.append({"from": target_node, "to": platform_node, "label": "handle reuse"})
+                added_nodes.add(platform_node)
+                
+        elif cat == "Email Pivot Data":
+            domain = lbl.replace("MX Domain Server: ", "")
+            email_node = f"email_{domain}"
+            if email_node not in added_nodes:
+                nodes.append({
+                    "id": email_node,
+                    "label": f"📧 @{domain}",
+                    "group": "email",
+                    "title": f"Target Email Domain: {domain}"
+                })
+                edges.append({"from": "case_root", "to": email_node, "label": "associated email"})
+                added_nodes.add(email_node)
+                
+            srv_node = f"srv_{val}"
+            if srv_node not in added_nodes:
+                nodes.append({
+                    "id": srv_node,
+                    "label": f"🖥️ {val}",
+                    "group": "server",
+                    "title": f"MX Mail Server: {val}"
+                })
+                edges.append({"from": email_node, "to": srv_node, "label": "mx routing"})
+                added_nodes.add(srv_node)
+                
+        elif cat == "Geotag Correlation":
+            city = lbl.replace("City Check: ", "")
+            city_node = f"city_{city}"
+            
+            target_node = "ig_target"
+            if target_node not in added_nodes:
+                nodes.append({
+                    "id": target_node,
+                    "label": "📸 Target Profile",
+                    "group": "target",
+                    "title": "Primary Target Instagram Account"
+                })
+                edges.append({"from": "case_root", "to": target_node, "label": "investigates"})
+                added_nodes.add(target_node)
+                
+            if city_node not in added_nodes:
+                nodes.append({
+                    "id": city_node,
+                    "label": f"📍 {city}",
+                    "group": "geotag",
+                    "title": f"Geotag check: {city}"
+                })
+                edges.append({"from": target_node, "to": city_node, "label": "geotag correlation"})
+                added_nodes.add(city_node)
+
+        elif cat == "Anonymous Mirrors":
+            target_node = "ig_target"
+            if target_node not in added_nodes:
+                nodes.append({
+                    "id": target_node,
+                    "label": "📸 Target Profile",
+                    "group": "target",
+                    "title": "Primary Target Instagram Account"
+                })
+                edges.append({"from": "case_root", "to": target_node, "label": "investigates"})
+                added_nodes.add(target_node)
+            
+            mirror_node = f"mirror_{lbl}"
+            if mirror_node not in added_nodes:
+                # Clean mirror label a bit
+                clean_lbl = lbl.split("(")[0].strip()
+                nodes.append({
+                    "id": mirror_node,
+                    "label": f"🕶️ {clean_lbl}",
+                    "group": "mirror",
+                    "title": f"Anonymous viewer mirror URL: {val}"
+                })
+                edges.append({"from": target_node, "to": mirror_node, "label": "view proxy"})
+                added_nodes.add(mirror_node)
+                
+    return {"nodes": nodes, "edges": edges}
+
 # --- Static File Serving ---
 
 # Main entry page
@@ -374,3 +521,4 @@ def read_root():
 
 # Mount directories (Make sure static folder exists)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+

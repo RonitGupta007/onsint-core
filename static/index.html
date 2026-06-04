@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="/static/style.css">
     <!-- FontAwesome for Premium Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Vis.js for Network Graphing -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -118,6 +120,9 @@
                     </button>
                     <button class="tab-btn" data-tab="tab-vault">
                         <i class="fa-solid fa-vault"></i> Case Vault
+                    </button>
+                    <button class="tab-btn" data-tab="tab-graph">
+                        <i class="fa-solid fa-circle-nodes"></i> Connection Graph
                     </button>
                 </div>
                 
@@ -410,6 +415,33 @@
                                         </tbody>
                                     </table>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- TAB 6: CONNECTION GRAPH -->
+                    <div class="tab-content" id="tab-graph">
+                        <div class="section-title">
+                            <h2>Interactive Target Connection Graph</h2>
+                            <p>Visualize relationships between case targets, discovered social platforms, email domains, and infrastructure servers.</p>
+                        </div>
+                        
+                        <div class="vault-info-banner" id="graph-empty-banner">
+                            <i class="fa-solid fa-circle-nodes banner-icon"></i>
+                            <h3>No Case File Target Active</h3>
+                            <p>Select an active Case File in the left sidebar directory registry to visualize target relationships.</p>
+                        </div>
+                        
+                        <div class="graph-data-frame" id="graph-data-frame" style="display: none;">
+                            <div class="vault-header-actions mb-3">
+                                <h3>Visual Entity Map</h3>
+                                <button class="btn btn-secondary btn-sm" id="btn-refresh-graph">
+                                    <i class="fa-solid fa-arrows-rotate"></i> Recalculate Diagram
+                                </button>
+                            </div>
+                            
+                            <div class="card glass" style="padding: 0; overflow: hidden; position: relative;">
+                                <div id="network-graph" style="height: 550px; width: 100%;"></div>
                             </div>
                         </div>
                     </div>

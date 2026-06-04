@@ -69,7 +69,13 @@ const elements = {
     vaultEmptyBanner: document.getElementById("vault-empty-banner"),
     vaultDataFrame: document.getElementById("vault-data-frame"),
     vaultTableTbody: document.getElementById("vault-table-tbody"),
-    btnDownloadCsv: document.getElementById("btn-download-csv")
+    btnDownloadCsv: document.getElementById("btn-download-csv"),
+    
+    // Tab 6: Connection Graph
+    graphEmptyBanner: document.getElementById("graph-empty-banner"),
+    graphDataFrame: document.getElementById("graph-data-frame"),
+    networkGraph: document.getElementById("network-graph"),
+    btnRefreshGraph: document.getElementById("btn-refresh-graph")
 };
 
 // --- INITIALIZATION ---
@@ -90,6 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.btnSearchCity.addEventListener("click", handleCityQuery);
     elements.btnStartScan.addEventListener("click", handleFootprintScan);
     elements.btnDownloadCsv.addEventListener("click", handleDownloadCSV);
+    elements.btnRefreshGraph.addEventListener("click", loadConnectionGraph);
     
     // Automatically keep username fields in sync
     [elements.directUsername, elements.envUsername, elements.footprintUsername].forEach(input => {
@@ -115,9 +122,13 @@ function updateStatsBanner() {
     if (state.activeCase) {
         elements.vaultEmptyBanner.style.display = "none";
         elements.vaultDataFrame.style.display = "block";
+        elements.graphEmptyBanner.style.display = "none";
+        elements.graphDataFrame.style.display = "block";
     } else {
         elements.vaultEmptyBanner.style.display = "flex";
         elements.vaultDataFrame.style.display = "none";
+        elements.graphEmptyBanner.style.display = "flex";
+        elements.graphDataFrame.style.display = "none";
     }
 }
 
@@ -143,6 +154,8 @@ function initTabs() {
             // Load case data if case vault tab selected
             if (targetTab === "tab-vault") {
                 loadVaultFindings();
+            } else if (targetTab === "tab-graph") {
+                loadConnectionGraph();
             }
         });
     });
@@ -663,3 +676,124 @@ async function handleDownloadCSV() {
         console.error(e);
     }
 }
+
+// --- Tab 6: Vis.js Connection Graph Logic ---
+let networkInstance = null;
+
+async function loadConnectionGraph() {
+    if (!state.activeCase) {
+        elements.graphEmptyBanner.style.display = "flex";
+        elements.graphDataFrame.style.display = "none";
+        return;
+    }
+    
+    elements.graphEmptyBanner.style.display = "none";
+    elements.graphDataFrame.style.display = "block";
+    
+    try {
+        const r = await fetch(`/api/cases/${encodeURIComponent(state.activeCase)}/graph`);
+        const data = await r.json();
+        
+        // Custom stylings for different node groups
+        const nodes = data.nodes.map(n => {
+            let color = "#64748b"; // default slate
+            let shape = "dot";
+            let size = 16;
+            
+            if (n.group === "case") {
+                color = "#6366f1"; // Indigo
+                shape = "hexagon";
+                size = 26;
+            } else if (n.group === "target") {
+                color = "#a855f7"; // Purple
+                shape = "dot";
+                size = 22;
+            } else if (n.group === "uid") {
+                color = "#ec4899"; // Pink
+                shape = "diamond";
+                size = 18;
+            } else if (n.group === "platform") {
+                color = "#3b82f6"; // Blue
+                shape = "dot";
+                size = 18;
+            } else if (n.group === "email") {
+                color = "#f43f5e"; // Rose
+                shape = "triangle";
+                size = 18;
+            } else if (n.group === "server") {
+                color = "#eab308"; // Amber
+                shape = "square";
+                size = 14;
+            } else if (n.group === "geotag") {
+                color = "#10b981"; // Emerald
+                shape = "star";
+                size = 18;
+            } else if (n.group === "mirror") {
+                color = "#06b6d4"; // Cyan
+                shape = "dot";
+                size = 14;
+            }
+            
+            return {
+                ...n,
+                color: {
+                    background: color,
+                    border: "#1e293b",
+                    highlight: { background: color, border: "#f1f5f9" }
+                },
+                shape: shape,
+                size: size,
+                font: { color: "#f1f5f9", face: "Outfit", size: 12, bold: { color: "#f1f5f9" } },
+                borderWidth: 2
+            };
+        });
+        
+        const edges = data.edges.map(e => {
+            return {
+                ...e,
+                color: { color: "rgba(255,255,255,0.08)", highlight: "rgba(168, 85, 247, 0.4)" },
+                font: { color: "#64748b", face: "Outfit", size: 9 },
+                width: 1.5,
+                arrows: { to: { enabled: true, scaleFactor: 0.8 } }
+            };
+        });
+        
+        const container = elements.networkGraph;
+        const graphData = {
+            nodes: new vis.DataSet(nodes),
+            edges: new vis.DataSet(edges)
+        };
+        
+        const options = {
+            nodes: {
+                borderWidth: 2,
+                shadow: { enabled: true, color: "rgba(0,0,0,0.3)", size: 4, x: 2, y: 2 }
+            },
+            physics: {
+                forceAtlas2Based: {
+                    gravitationalConstant: -50,
+                    centralGravity: 0.015,
+                    springLength: 100,
+                    springConstant: 0.08
+                },
+                maxVelocity: 50,
+                solver: "forceAtlas2Based",
+                timestep: 0.35,
+                stabilization: { iterations: 100 }
+            },
+            interaction: {
+                hover: true,
+                tooltipDelay: 150
+            }
+        };
+        
+        if (networkInstance) {
+            networkInstance.destroy();
+        }
+        
+        networkInstance = new vis.Network(container, graphData, options);
+    } catch (e) {
+        console.error("Error drawing graph:", e);
+    }
+}
+
