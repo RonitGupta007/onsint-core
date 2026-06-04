@@ -259,9 +259,11 @@ def instagram_profile(payload: InstagramInput):
     mirrors = get_opsec_viewers(username)
     
     if payload.case_name:
-        save_finding_db(payload.case_name, "Instagram Metadata", "Permanent UserID", uid)
+        if not uid.startswith("Manual Verification Required"):
+            save_finding_db(payload.case_name, "Instagram Metadata", "Permanent UserID", uid)
         for label, url in mirrors.items():
             save_finding_db(payload.case_name, "Anonymous Mirrors", label, url)
+
             
     return {
         "username": username,
