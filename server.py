@@ -259,8 +259,7 @@ def instagram_profile(payload: InstagramInput):
     mirrors = get_opsec_viewers(username)
     
     if payload.case_name:
-        if not uid.startswith("Manual Verification Required"):
-            save_finding_db(payload.case_name, "Instagram Metadata", "Permanent UserID", uid)
+        save_finding_db(payload.case_name, "Instagram Metadata", "Permanent UserID", uid)
         for label, url in mirrors.items():
             save_finding_db(payload.case_name, "Anonymous Mirrors", label, url)
 
@@ -404,16 +403,17 @@ def get_case_graph(case_name: str):
                 edges.append({"from": "case_root", "to": target_node, "label": "investigates"})
                 added_nodes.add(target_node)
                 
-            uid_node = f"uid_{val}"
-            if uid_node not in added_nodes:
-                nodes.append({
-                    "id": uid_node,
-                    "label": f"🆔 UID: {val}",
-                    "group": "uid",
-                    "title": f"Permanent numerical ID: {val}"
-                })
-                edges.append({"from": target_node, "to": uid_node, "label": "resolves"})
-                added_nodes.add(uid_node)
+            if not val.startswith("Manual Verification Required"):
+                uid_node = f"uid_{val}"
+                if uid_node not in added_nodes:
+                    nodes.append({
+                        "id": uid_node,
+                        "label": f"🆔 UID: {val}",
+                        "group": "uid",
+                        "title": f"Permanent numerical ID: {val}"
+                    })
+                    edges.append({"from": target_node, "to": uid_node, "label": "resolves"})
+                    added_nodes.add(uid_node)
                 
         elif cat == "Cross Platform Profile":
             target_node = "ig_target"
