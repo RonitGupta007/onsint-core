@@ -167,6 +167,23 @@
                                         <i class="fa-solid fa-lightbulb"></i>
                                         <span>Use this ID to track profile updates across case lifecycle.</span>
                                     </div>
+                                    <div id="manual-uid-helper" style="display: none; margin-top: 1.25rem; border-top: 1px dashed var(--border); padding-top: 1.25rem;">
+                                        <div class="alert-info" style="background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.2); color: #fca5a5; margin-bottom: 0.75rem;">
+                                            <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444;"></i>
+                                            <span>IP Rate-Limited. Resolve ID manually with external tools:</span>
+                                        </div>
+                                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                                            <a href="https://commentpicker.com/instagram-username-to-id.php" target="_blank" class="btn btn-secondary btn-sm" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;"><i class="fa-solid fa-square-up-right"></i> CommentPicker</a>
+                                            <a href="https://codeofaninja.com/tools/find-instagram-user-id/" target="_blank" class="btn btn-secondary btn-sm" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;"><i class="fa-solid fa-square-up-right"></i> CodeOfaNinja</a>
+                                        </div>
+                                        <div class="form-group" style="margin-top: 1rem; margin-bottom: 0;">
+                                            <label for="manual-uid-input" style="font-size: 0.75rem;">Override Numeric ID Value</label>
+                                            <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                                                <input type="text" id="manual-uid-input" placeholder="e.g. 11840292837" style="flex: 1;">
+                                                <button class="btn btn-primary btn-sm" id="btn-save-manual-uid" style="padding: 0 1rem; border-radius: 8px;">Save</button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             

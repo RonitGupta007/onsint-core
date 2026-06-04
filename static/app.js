@@ -33,6 +33,10 @@ const elements = {
     directResultsGrid: document.getElementById("direct-results-grid"),
     directUid: document.getElementById("direct-uid"),
     directMirrorsList: document.getElementById("direct-mirrors-list"),
+    manualUidHelper: document.getElementById("manual-uid-helper"),
+    manualUidInput: document.getElementById("manual-uid-input"),
+    btnSaveManualUid: document.getElementById("btn-save-manual-uid"),
+
     
     // Tab 2: Email to Username
     targetEmail: document.getElementById("target-email"),
@@ -97,6 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.btnStartScan.addEventListener("click", handleFootprintScan);
     elements.btnDownloadCsv.addEventListener("click", handleDownloadCSV);
     elements.btnRefreshGraph.addEventListener("click", loadConnectionGraph);
+    elements.btnSaveManualUid.addEventListener("click", handleSaveManualUid);
     
     // Automatically keep username fields in sync
     [elements.directUsername, elements.envUsername, elements.footprintUsername].forEach(input => {
@@ -315,6 +320,13 @@ async function handleDirectProfileQuery() {
             const data = await r.json();
             elements.directUid.innerText = data.user_id;
             
+            // Show manual override helper if API rate-limited
+            if (data.user_id.includes("Manual Verification Required")) {
+                elements.manualUidHelper.style.display = "block";
+            } else {
+                elements.manualUidHelper.style.display = "none";
+            }
+            
             // Build mirrors list
             elements.directMirrorsList.innerHTML = "";
             data.mirrors.forEach(m => {
@@ -336,6 +348,39 @@ async function handleDirectProfileQuery() {
     } finally {
         elements.btnFetchDirect.disabled = false;
         elements.btnFetchDirect.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Analyze';
+    }
+}
+
+async function handleSaveManualUid() {
+    const val = elements.manualUidInput.value.trim();
+    if (!val || !state.activeCase) return;
+    
+    elements.btnSaveManualUid.disabled = true;
+    elements.btnSaveManualUid.innerText = "Saving...";
+    
+    try {
+        const r = await fetch(`/api/cases/${encodeURIComponent(state.activeCase)}/findings`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                category: "Instagram Metadata",
+                label: "Permanent UserID",
+                value: val
+            })
+        });
+        
+        if (r.ok) {
+            elements.directUid.innerText = val;
+            elements.manualUidInput.value = "";
+            elements.manualUidHelper.style.display = "none";
+            await refreshFindingsCount();
+            updateStatsBanner();
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        elements.btnSaveManualUid.disabled = false;
+        elements.btnSaveManualUid.innerText = "Save";
     }
 }
 
