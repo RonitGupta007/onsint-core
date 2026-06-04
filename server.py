@@ -231,6 +231,32 @@ def email_heuristics(payload: EmailInput):
 # --- Instagram Intelligence Core ---
 
 def get_ig_user_id(username: str) -> str:
+    # Method 1: Scrape public HTML page (Highly reliable without authentication)
+    try:
+        url = f"https://www.instagram.com/{username}/"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+        r = requests.get(url, headers=headers, timeout=6)
+        if r.status_code == 200:
+            # Pattern A: Polaris / React properties
+            m = re.search(r'"props"\s*:\s*\{\s*"id"\s*:\s*"(\d+)"', r.text)
+            if m:
+                return str(m.group(1))
+            # Pattern B: profilePage_ID
+            m = re.search(r'profilePage_(\d+)', r.text)
+            if m:
+                return str(m.group(1))
+            # Pattern C: user_id key
+            m = re.search(r'"user_id"\s*:\s*"(\d+)"', r.text)
+            if m:
+                return str(m.group(1))
+    except Exception:
+        pass
+
+    # Method 2: Legacy fallback API endpoint
     try:
         url = f"https://www.instagram.com/{username}/?__a=1&__d=dis"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0"}
@@ -238,8 +264,9 @@ def get_ig_user_id(username: str) -> str:
         if r.status_code == 200:
             data = r.json()
             return str(data['graphql']['user']['id'])
-    except:
+    except Exception:
         pass
+
     return "Manual Verification Required (API Rate-Limited)"
 
 def get_opsec_viewers(username: str) -> dict:
