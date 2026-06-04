@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  osint-app:
+    build: .
+    container_name: osint_dashboard
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - osint_data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data/ig_int_vault.db
+      - PYTHONUNBUFFERED=1
+
+volumes:
+  osint_data:
+    driver: local
