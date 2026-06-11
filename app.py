@@ -3,207 +3,42 @@ import requests
 import pandas as pd
 import concurrent.futures
 import random
-import datetime
 import urllib.parse
-import sqlite3
 import re
+import socket
+import dns.resolver
 
-# ─────────────────────────────────────────────
-# 1. DATABASE & CASE MANAGEMENT (SQLite)
-# ─────────────────────────────────────────────
-DB_FILE = "ig_int_vault.db"
+# Import shared OSINT and DB routines
+from backend.database import init_db, create_case, get_cases, save_finding, get_findings, DB_FILE
+from backend.osint import (
+    fetch_proxies, perform_whois, get_geoip_info, PLATFORMS, check_platform, generate_username_guesses
+)
 
-def init_db():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS cases 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, created_at TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS findings 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, case_name TEXT, category TEXT, label TEXT, value TEXT, timestamp TEXT)''')
-    conn.commit()
-    conn.close()
-
-def create_case(case_name):
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    c = conn.cursor()
-    try:
-        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        c.execute("INSERT INTO cases (name, created_at) VALUES (?, ?)", (case_name.strip(), ts))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        pass
-    conn.close()
-
-def get_cases():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    c = conn.cursor()
-    c.execute("SELECT name FROM cases ORDER BY id DESC")
-    rows = c.fetchall()
-    conn.close()
-    return [r[0] for r in rows]
-
-def save_finding(case_name, category, label, value):
-    if not case_name or case_name == "-- Select Active Case --":
-        return
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    c = conn.cursor()
-    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    c.execute("INSERT INTO findings (case_name, category, label, value, timestamp) VALUES (?, ?, ?, ?, ?)",
-              (case_name, category, label, str(value), ts))
-    conn.commit()
-    conn.close()
-
-def get_findings(case_name):
-    if not case_name or case_name == "-- Select Active Case --":
-        return []
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    c = conn.cursor()
-    c.execute("SELECT category, label, value, timestamp FROM findings WHERE case_name = ? ORDER BY id DESC", (case_name,))
-    rows = c.fetchall()
-    conn.close()
-    return [{"Category": r[0], "Label": r[1], "Value": r[2], "Timestamp": r[3]} for r in rows]
-
+# Initialize database
 init_db()
 
 # ─────────────────────────────────────────────
-# 2. PROXY ROUTING SYSTEM
+# 1. STREAMLIT LAYOUT & CUSTOM CSS
 # ─────────────────────────────────────────────
-if "proxies" not in st.session_state:
-    st.session_state.proxies = []
+st.set_page_config(layout="wide", page_title="ONSINT Core Dashboard")
 
-def fetch_proxies():
-    url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all"
-    try:
-        r = requests.get(url, timeout=10)
-        if r.status_code == 200:
-            lines = r.text.splitlines()
-            return [{"http": f"http://{p}", "https": f"http://{p}"} for p in lines if p.strip()]
-    except:
-        return []
-
-def get_random_proxy():
-    return random.choice(st.session_state.proxies) if st.session_state.proxies else None
-
-# ─────────────────────────────────────────────
-# 3. UPGRADED CONCURRENCY PLATFORM CONFIG
-# ─────────────────────────────────────────────
-# Format: Name -> (URL_Template, [Not_Found_Strings], Category)
-PLATFORMS = {
-    "GitHub": ("https://github.com/{}", ["Not Found", "404"], "Developer"),
-    "Twitter/X": ("https://twitter.com/{}", ["doesn't exist", "page doesn't exist"], "Social"),
-    "Reddit": ("https://www.reddit.com/user/{}", ["user not found", "page not found"], "Social"),
-    "TikTok": ("https://www.tiktok.com/@{}", ["Couldn't find this account", "notfound"], "Social"),
-    "Pinterest": ("https://www.pinterest.com/{}", ["couldn't find that page", "resource_not_found"], "Social"),
-    "Twitch": ("https://www.twitch.tv/{}", ["unavailable", "page is unavailable"], "Gaming/Video"),
-    "Dev.to": ("https://dev.to/{}", ["404", "page not found"], "Developer"),
-    "Keybase": ("https://keybase.io/{}", ["not found", "\"them\":null"], "Developer"),
-    "Medium": ("https://medium.com/@{}", ["404", "page not found", "out of order"], "Blogging"),
-    "Spotify": ("https://open.spotify.com/user/{}", ["not found", "404"], "Entertainment"),
-    "Steam": ("https://steamcommunity.com/id/{}", ["The specified profile could not be found"], "Gaming/Video"),
-    "Linktree": ("https://linktr.ee/{}", ["404", "page not found"], "Social"),
-    "Flickr": ("https://www.flickr.com/photos/{}", ["page not found", "404"], "Entertainment"),
-    "Letterboxd": ("https://letterboxd.com/{}", ["404", "not found"], "Entertainment"),
-    "Vimeo": ("https://vimeo.com/{}", ["not found", "404"], "Gaming/Video"),
-    "SoundCloud": ("https://soundcloud.com/{}", ["not found", "404"], "Entertainment"),
-}
-
-def check_platform(name, username, proxy):
-    url_tpl, not_found_strs, category = PLATFORMS[name]
-    url = url_tpl.format(username)
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    try:
-        r = requests.get(url, timeout=6, headers=headers, proxies=proxy, allow_redirects=True)
-        if r.status_code != 200:
-            return None
-            
-        # Parse body for signature checks (false positive prevention)
-        body_lower = r.text.lower()
-        if any(err_str.lower() in body_lower for err_str in not_found_strs):
-            return None
-            
-        return {"Platform": name, "Category": category, "Status": "Active Profile", "URL": url}
-    except:
-        pass
-    return None
-
-# ─────────────────────────────────────────────
-# 4. EMAIL HEURISTIC GENERATOR
-# ─────────────────────────────────────────────
-def generate_username_guesses(email):
-    """Derives a rich set of username candidates from an email address local-part"""
-    local = email.split("@")[0]
-    suffix = (re.search(r"\d+$", local) or type("", (), {"group": lambda s, x: ""})()).group(0)
-    base = re.sub(r"\d+$", "", local)
-    parts = re.split(r"[._\-]", base)
-    clean = "".join(parts)
-
-    guesses = [
-        local, clean + suffix, base, clean,
-        "_".join(parts), ".".join(parts),
-        "".join(reversed(parts)), ".".join(reversed(parts)),
-        "_".join(reversed(parts)), clean + "official", clean + "_official",
-        "the" + clean, clean + "real", clean + "ig", clean + "yt",
-        "_" + clean, clean + "_",
-    ]
-    if len(parts) >= 2:
-        guesses += [parts[0] + parts[1][0], parts[0][0] + parts[1]]
-
-    # Ensure output has unique handles with lengths of 3 or more characters
-    return list(dict.fromkeys(g for g in guesses if g and len(g) >= 3))
-
-# ─────────────────────────────────────────────
-# 5. INSTAGRAM INTELLIGENCE CORE
-# ─────────────────────────────────────────────
-def get_ig_user_id(username):
-    try:
-        url = f"https://www.instagram.com/{username}/?__a=1&__d=dis"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0"}
-        r = requests.get(url, headers=headers, timeout=5)
-        if r.status_code == 200:
-            data = r.json()
-            return data['graphql']['user']['id']
-    except:
-        return "Manual Verification Required (API Rate-Limited)"
-
-def generate_environment_dorks(username):
-    encoded = urllib.parse.quote(username)
-    return {
-        "Tagged Photo Ecosystem": f'site:instagram.com "{username}" -site:instagram.com/{encoded}',
-        "Comments Tracking": f'site:instagram.com "from {username}" OR "comment" "{username}"',
-        "Leaked Associated Contact Info": f'site:instagram.com "{username}" "@gmail.com" OR "contact" OR "+1"',
-        "Web Mentions (Cross-Platform)": f'"{username}" site:facebook.com OR site:twitter.com OR site:linkedin.com',
-        "Archived/Cached Snapshots": f'cache:https://www.instagram.com/{encoded}'
-    }
-
-def get_opsec_viewers(username):
-    return {
-        "View Stories Anonymously (StoryNavigation)": f"https://storynavigation.com/user/{username}",
-        "View Posts & Reels Safely (Imginn)": f"https://imginn.com/user/{username}",
-        "Deep Search (Dumpor)": f"https://dumpor.com/v/{username}"
-    }
-
-# ─────────────────────────────────────────────
-# 6. STREAMLIT LAYOUT & CUSTOM CSS
-# ─────────────────────────────────────────────
 st.markdown("""
     <style>
     .stMetric { background-color: #0d1117; padding: 15px; border-radius: 8px; border: 1px solid #21262d; }
-    .stButton>button { border-radius: 6px; background-color: #8a3ab9 !important; color: white !important; font-weight: bold; }
+    .stButton>button { border-radius: 6px; background-color: #4361ee !important; color: white !important; font-weight: bold; }
     .stAlert { border-radius: 6px; }
     </style>
     """, unsafe_allow_html=True)
 
 # SIDEBAR: Investigator's Dashboard
 with st.sidebar:
-    st.title("📸 IG INT Core")
-    st.info("Direct and Environmental Analysis framework for Instagram Targets.")
+    st.title("📡 ONSINT Core")
+    st.info("General Purpose OSINT Intelligence Dashboard")
     
     st.divider()
     
     st.subheader("📁 Case File Registry")
-    new_case = st.text_input("Create Investigation File", placeholder="e.g. Case_2026_IG_Target")
+    new_case = st.text_input("Create Investigation File", placeholder="e.g. Case_2026_Global_Audit")
     if st.button("Initialize Case File"):
         if new_case:
             create_case(new_case)
@@ -211,7 +46,7 @@ with st.sidebar:
             st.rerun()
 
     cases = get_cases()
-    active_case = st.selectbox("Active Case Target Profile", ["-- Select Active Case --"] + cases)
+    active_case = st.selectbox("Active Case Target", ["-- Select Active Case --"] + cases)
     
     st.divider()
     
@@ -221,153 +56,47 @@ with st.sidebar:
         st.success(f"Refreshed {len(st.session_state.proxies)} proxies!")
     
     st.write(f"**Stealth Mode:** {'✅ Active (Rotating)' if st.session_state.proxies else '⚠️ Direct IP (No Proxy)'}")
+    st.divider()
+    st.markdown("<p style='font-size:0.8rem; color:#94a3b8; font-weight:500;'><i class='fa-solid fa-user-ninja' style='color:#9d4edd; margin-right:0.25rem;'></i> Made by <strong>Ronit Gupta</strong></p>", unsafe_allow_html=True)
 
 # EXECUTIVE DASHBOARD HEADER
-st.title("📸 Specialized Instagram Intelligence Framework")
+st.title("📡 ONSINT Core Intelligence Suite")
 st.markdown("---")
 
 col1, col2, col3 = st.columns(3)
-col1.metric("Active Case Target", active_case if active_case != "-- Select Active Case --" else "Unlinked", delta_color="off")
+col1.metric("Active Case File", active_case if active_case != "-- Select Active Case --" else "Unlinked", delta_color="off")
 col2.metric("Recorded Findings", len(get_findings(active_case)) if active_case != "-- Select Active Case --" else "0")
 col3.metric("Proxy Pool Size", f"{len(st.session_state.proxies)} IPs" if st.session_state.proxies else "Direct IP")
 
 st.markdown("---")
 
 # SYSTEM WORKSPACE TABS
-tab1, tab_email, tab2, tab3, tab4 = st.tabs([
-    "🔐 Direct Target profiling", 
-    "📧 Email to Username",
-    "🕸️ Profile Environment Scanner", 
-    "🌐 Cross-Platform Digital Footprint",
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "👤 Username Search", 
+    "🖥️ Domain & IP Intel",
+    "📧 Email Intel",
+    "📞 Phone Resolver",
+    "🛠️ Dork Studio",
     "📁 Case Vault Reporting"
 ])
 
-# 🔐 DIRECT TARGET PROFILING
+def get_random_proxy():
+    return random.choice(st.session_state.proxies) if st.session_state.proxies else None
+
+# 👤 USERNAME SEARCH
 with tab1:
-    st.header("Direct Target Investigation & Keys")
+    st.header("Username & Digital Footprint Scan")
+    st.write("Scan handle deployments across developer, social, and entertainment network endpoints.")
     
-    # Check if a username was loaded from the Email tab session state
     suggested_username = st.session_state.get("derived_username_choice", "")
-    target_ig = st.text_input("Target Instagram Username", value=suggested_username, placeholder="e.g. j_doe", key="direct_ig")
+    target_username = st.text_input("Audit Username Handle", value=suggested_username, placeholder="e.g. john_doe")
     
-    if target_ig:
-        target_ig = target_ig.replace("@", "").strip()
-        st.write("---")
-        
-        col_left, col_right = st.columns(2)
-        
-        with col_left:
-            st.subheader("🔑 Persistent Key Resolution")
-            uid = get_ig_user_id(target_ig)
-            st.info(f"**Permanent Numerical User ID:** `{uid}`")
-            save_finding(active_case, "Instagram Metadata", "Permanent UserID", uid)
-            st.caption("💡 Key Concept: If the target renames their account to evade detection, this numerical ID remains constant.")
-            
-        with col_right:
-            st.subheader("🛡️ OpSec-Safe Anonymous Mirrors")
-            st.write("Examine target assets without logging in, bypassing story 'view receipts' and account tracking:")
-            mirrors = get_opsec_viewers(target_ig)
-            for label, url in mirrors.items():
-                st.markdown(f"🔗 [{label}]({url})")
-                save_finding(active_case, "Anonymous Mirrors", label, url)
-
-# 📧 EMAIL TO USERNAME HEURISTICS
-with tab_email:
-    st.header("Email-to-Username Analysis")
-    st.write("Construct username candidates from an email's local part structure and audit validation logs.")
-    
-    input_email = st.text_input("Target Email Address", placeholder="e.g. john.doe99@gmail.com")
-    
-    if input_email:
-        if "@" in input_email:
-            st.write("---")
-            col_em_l, col_em_r = st.columns(2)
-            
-            with col_em_l:
-                st.subheader("💡 Username Candidates")
-                st.write("Heuristic handle permutations generated from the email structure. Click a suggestion to load it globally:")
-                
-                candidates = generate_username_guesses(input_email)
-                
-                for candidate in candidates:
-                    # Clicking a button stores the candidate in st.session_state so tabs 1, 3, and 4 can use it
-                    if st.button(f"🎯 Try @{candidate}", key=f"cand_{candidate}"):
-                        st.session_state["derived_username_choice"] = candidate
-                        st.success(f"Loaded handle @{candidate}. Go to other tabs to perform intelligence operations.")
-                        st.rerun()
-                        
-            with col_em_r:
-                st.subheader("🛠️ Quick Mail Environment Verification")
-                st.write("Checking email structure and routing configuration properties.")
-                domain = input_email.split("@")[-1]
-                
-                try:
-                    # Validate domain is ready for mail operations
-                    import dns.resolver
-                    records = dns.resolver.resolve(domain, 'MX')
-                    st.success(f"Domain Validation: @{domain} is actively configured to receive messages.")
-                    for r in records:
-                        save_finding(active_case, "Email Pivot Data", f"MX Domain Server: {domain}", str(r.exchange))
-                except Exception:
-                    st.error(f"Domain Error: @{domain} lacks valid MX routing records. This email host may be non-operational.")
-        else:
-            st.error("Please provide a valid email structure containing '@'.")
-
-# 🕸️ PROFILE ENVIRONMENT SCANNER
-with tab2:
-    st.header("Profile Environment Scanner")
-    st.write("Bypass target-controlled privacy configurations by scanning the outer ecosystem [8].")
-    
-    suggested_env_username = st.session_state.get("derived_username_choice", "")
-    target_env = st.text_input("Target Instagram Username", value=suggested_env_username, placeholder="e.g. j_doe", key="env_ig")
-    
-    if target_env:
-        target_env = target_env.replace("@", "").strip()
-        st.write("---")
-        
-        col_l, col_r = st.columns(2)
-        
-        with col_l:
-            st.subheader("🕸️ Associated Environment Analysis")
-            st.write("Audit how other profiles interact with or mention the target [8]:")
-            
-            dorks = generate_environment_dorks(target_env)
-            for label, dork_string in dorks.items():
-                st.write(f"**{label}**")
-                st.code(dork_string, language="bash")
-                g_url = f"https://www.google.com/search?q={urllib.parse.quote(dork_string)}"
-                st.link_button(f"Query {label} Caches", g_url)
-                save_finding(active_case, "Profile Environment Dorks", label, dork_string)
-                
-        with col_r:
-            st.subheader("🗺️ Geographical & Activity Correlator")
-            st.write("Cross-reference the username with physical environments to pinpoint patterns of life:")
-            
-            search_city = st.text_input("Target Location tag filter (e.g. London)", placeholder="Miami")
-            if search_city:
-                geo_dork = f'site:instagram.com "{target_env}" "{search_city}"'
-                st.code(geo_dork, language="bash")
-                g_geo_url = f"https://www.google.com/search?q={urllib.parse.quote(geo_dork)}"
-                st.link_button(f"Search Tagged Media in {search_city}", g_geo_url)
-                save_finding(active_case, "Geotag Correlation", f"City Check: {search_city}", geo_dork)
-
-# 🌐 UPGRADED CROSS-PLATFORM DIGITAL FOOTPRINT SCANNER
-with tab3:
-    st.header("Advanced Digital Footprint Scan")
-    st.write("Trace target-handle deployment across multiple domains using real-time content verification.")
-    
-    suggested_cross_username = st.session_state.get("derived_username_choice", "")
-    target_cross = st.text_input("Target Instagram Username", value=suggested_cross_username, placeholder="e.g. j_doe", key="cross_ig")
-    
-    # Category filter configuration
     available_categories = sorted(list(set(p[2] for p in PLATFORMS.values())))
-    selected_categories = st.multiselect("Scan Categories Filter (Leave empty to scan all)", available_categories)
+    selected_categories = st.multiselect("Scan Categories Filter (Leave empty to scan all)", available_categories, key="uname_cats")
     
-    if target_cross:
-        target_cross = target_cross.replace("@", "").strip()
-        st.write("---")
+    if target_username:
+        target_username = target_username.replace("@", "").strip()
         
-        # Filter platform list based on user choices
         platforms_to_scan = [
             name for name, data in PLATFORMS.items() 
             if not selected_categories or data[2] in selected_categories
@@ -378,27 +107,25 @@ with tab3:
             progress = st.progress(0)
             status = st.empty()
             
-            # Placeholders to stream live data
             st.subheader("⚡ Live Finding Streams")
             live_table_placeholder = st.empty()
             
-            # Thread pooling and executing
             with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                 futures = {
-                    executor.submit(check_platform, name, target_cross, get_random_proxy()): name 
+                    executor.submit(check_platform, name, target_username, get_random_proxy()): name 
                     for name in platforms_to_scan
                 }
                 
                 for idx, future in enumerate(concurrent.futures.as_completed(futures)):
                     res = future.result()
                     if res:
-                        results.append(res)
-                        save_finding(active_case, "Cross Platform Profile", res["Platform"], res["URL"])
+                        # Normalize key name for visual consistency in Streamlit dataframe
+                        res_fmt = {"Platform": res["platform"], "Category": res["category"], "Status": res["status"], "URL": res["url"]}
+                        results.append(res_fmt)
+                        save_finding(active_case, "Cross Platform Profile", f"{res['platform']} ({target_username})", res["url"])
                         
-                        # Dynamically update the output frame with active results
                         live_table_placeholder.dataframe(pd.DataFrame(results), use_container_width=True)
                     
-                    # Update progress metric
                     progress_pct = (idx + 1) / len(platforms_to_scan)
                     progress.progress(progress_pct)
                     status.text(f"Auditing Environment: {idx + 1}/{len(platforms_to_scan)} networks checked...")
@@ -409,21 +136,261 @@ with tab3:
                 live_table_placeholder.empty()
                 st.warning("No matches detected. Platform structures returned no valid environmental signs.")
 
-# 📁 CASE VAULT REPORTING
+# 🖥️ DOMAIN & IP INTEL
+with tab2:
+    st.header("Domain & IP Address Intelligence")
+    st.write("Resolve DNS records, fetch WHOIS registrar details, and geolocate IP network endpoints.")
+    
+    dom_col1, dom_col2 = st.columns(2)
+    
+    with dom_col1:
+        st.subheader("DNS & WHOIS Lookup")
+        domain_input = st.text_input("Enter Target Domain", placeholder="e.g. example.com")
+        if st.button("Query Domain Info"):
+            if domain_input:
+                domain_clean = domain_input.strip()
+                
+                # Resolve DNS
+                dns_records = {}
+                record_types = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME']
+                for rtype in record_types:
+                    try:
+                        answers = dns.resolver.resolve(domain_clean, rtype)
+                        dns_records[rtype] = [str(r).strip(".") for r in answers]
+                        for val in dns_records[rtype]:
+                            save_finding(active_case, "DNS Record", f"{rtype} Record ({domain_clean})", val)
+                    except:
+                        dns_records[rtype] = []
+                
+                # Fetch WHOIS
+                whois_raw = perform_whois(domain_clean)
+                registrar = "Unknown"
+                creation_date = "Unknown"
+                for line in whois_raw.splitlines():
+                    line_lower = line.lower()
+                    if "registrar:" in line_lower and registrar == "Unknown":
+                        registrar = line.split(":", 1)[1].strip()
+                    elif "creation date:" in line_lower and creation_date == "Unknown":
+                        creation_date = line.split(":", 1)[1].strip()
+                        
+                if registrar != "Unknown":
+                    save_finding(active_case, "Domain WHOIS", f"Registrar ({domain_clean})", registrar)
+                if creation_date != "Unknown":
+                    save_finding(active_case, "Domain WHOIS", f"Created Date ({domain_clean})", creation_date)
+                
+                st.success("Analysis complete. Saved records to active case vault.")
+                
+                # Render DNS Results
+                st.markdown("### DNS records")
+                for rtype, records in dns_records.items():
+                    if records:
+                        st.markdown(f"**{rtype} Record:**")
+                        for r in records:
+                            st.code(r)
+                
+                # Render WHOIS Results
+                st.markdown("### WHOIS Summary")
+                st.write(f"**Registrar:** {registrar}")
+                st.write(f"**Created On:** {creation_date}")
+                with st.expander("Show Raw WHOIS Log"):
+                    st.code(whois_raw)
+                    
+    with dom_col2:
+        st.subheader("IP Address Geolocation")
+        ip_input = st.text_input("Enter Target IP or Hostname", placeholder="e.g. 8.8.8.8")
+        if st.button("Geolocate Network Node"):
+            if ip_input:
+                ip_clean = ip_input.strip()
+                geoip = get_geoip_info(ip_clean)
+                
+                if not geoip or geoip.get("status") == "fail":
+                    try:
+                        resolved = socket.gethostbyname(ip_clean)
+                        geoip = get_geoip_info(resolved)
+                        ip_clean = resolved
+                    except:
+                        pass
+                
+                if geoip and geoip.get("status") != "fail":
+                    city = geoip.get("city", "Unknown")
+                    country = geoip.get("country", "Unknown")
+                    isp = geoip.get("isp", "Unknown")
+                    lat = geoip.get("lat", 0.0)
+                    lon = geoip.get("lon", 0.0)
+                    org = geoip.get("org", "Unknown")
+                    
+                    save_finding(active_case, "IP GeoIP", f"Location ({ip_clean})", f"{city}, {country}")
+                    save_finding(active_case, "IP GeoIP", f"ISP ({ip_clean})", isp)
+                    save_finding(active_case, "IP GeoIP", f"Coordinates ({ip_clean})", f"{lat}, {lon}")
+                    
+                    st.success(f"IP geolocated successfully.")
+                    st.write(f"**Coordinates:** `{lat}, {lon}`")
+                    st.write(f"**City:** {city}")
+                    st.write(f"**Country:** {country}")
+                    st.write(f"**ISP Provider:** {isp}")
+                    st.write(f"**Organization:** {org}")
+                    st.link_button("View on Google Maps", f"https://www.google.com/maps/search/?api=1&query={lat},{lon}")
+                else:
+                    st.error("Failed to fetch Geolocation records for this node.")
+
+# 📧 EMAIL INTEL
+with tab3:
+    st.header("Email Intelligence & Heuristic Candidates")
+    st.write("Analyze email hosts, extract handle guesses, and search leak networks.")
+    
+    input_email = st.text_input("Target Email Address", placeholder="e.g. john.doe99@gmail.com")
+    
+    if input_email:
+        if "@" in input_email:
+            col_em_l, col_em_r = st.columns(2)
+            
+            with col_em_l:
+                st.subheader("💡 Username Candidates")
+                st.write("Permutation handles derived from local email structure. Click a choice to select for profile scanning:")
+                
+                candidates = generate_username_guesses(input_email)
+                for candidate in candidates:
+                    if st.button(f"🎯 Use @{candidate}", key=f"cand_{candidate}"):
+                        st.session_state["derived_username_choice"] = candidate
+                        st.success(f"Loaded handle @{candidate}. Switch to Username tab to scan.")
+                        st.rerun()
+                        
+            with col_em_r:
+                st.subheader("🛠️ Mail Host Resolution")
+                domain = input_email.split("@")[-1]
+                
+                mx_servers = []
+                try:
+                    records = dns.resolver.resolve(domain, 'MX')
+                    st.success(f"Host Configured: @{domain} actively routing mail.")
+                    for r in records:
+                        srv = str(r.exchange).strip(".")
+                        mx_servers.append(srv)
+                        st.write(f"🖥️ Exchange Server: `{srv}`")
+                        save_finding(active_case, "Email Intel", f"MX Route ({input_email})", srv)
+                except Exception:
+                    st.error(f"Host Route Error: @{domain} lacks active MX records.")
+                    
+                st.subheader("🔍 Leak Audit Queries")
+                dorks = {
+                    "Email Leak Search": f'"{input_email}" filetype:txt OR filetype:csv OR filetype:sql',
+                    "Credential Dumps": f'"{input_email}" site:pastebin.com OR site:controlc.com OR site:rentry.co',
+                    "Public Mentions": f'"{input_email}" site:github.com OR site:gitlab.com OR site:bitbucket.org'
+                }
+                for label, query_str in dorks.items():
+                    st.markdown(f"**{label}**")
+                    st.code(query_str)
+                    st.link_button(f"Search {label}", f"https://www.google.com/search?q={urllib.parse.quote(query_str)}")
+                    save_finding(active_case, "Email Leak Dorks", f"{label} ({input_email})", query_str)
+        else:
+            st.error("Please provide a valid email format.")
+
+# 📞 PHONE RESOLVER
 with tab4:
-    st.header("Investigation File Repository")
+    st.header("Phone Decoder & Prefix Validator")
+    st.write("Validate international formats, decode country tags, and generate exposure dorks.")
+    
+    phone_input = st.text_input("Enter Target Phone", placeholder="e.g. +1 (555) 123-4567")
+    phone_cc = st.selectbox("Default Region Prefix", ["-- Auto-detect --", "1 (US/Canada)", "44 (UK)", "91 (India)", "61 (Australia)", "33 (France)", "49 (Germany)"])
+    
+    if st.button("Decode Target Phone"):
+        if phone_input:
+            clean_phone = re.sub(r"[^\d+]", "", phone_input)
+            if not clean_phone.startswith("+") and phone_cc != "-- Auto-detect --":
+                cc = phone_cc.split(" ")[0]
+                clean_phone = f"+{cc}{clean_phone}"
+            elif not clean_phone.startswith("+"):
+                clean_phone = f"+{clean_phone}"
+                
+            detected_country = "Unknown/Global"
+            country_prefixes = {
+                "1": "United States/Canada", "44": "United Kingdom", "91": "India", 
+                "61": "Australia", "33": "France", "49": "Germany", "81": "Japan"
+            }
+            for prefix, name in country_prefixes.items():
+                if clean_phone.startswith(f"+{prefix}"):
+                    detected_country = name
+                    break
+                    
+            save_finding(active_case, "Phone Intel", f"Details ({clean_phone})", f"Country: {detected_country}")
+            
+            st.success("Phone parsed successfully.")
+            st.write(f"**Formatted number:** `{clean_phone}`")
+            st.write(f"**Detected Region:** {detected_country}")
+            
+            st.subheader("🔍 Phone Mentions Queries")
+            dorks = {
+                "Web Mentions": f'"{clean_phone}" OR "{phone_input}"',
+                "Leaked Spreadsheets": f'("{clean_phone}" OR "{phone_input}") filetype:xls OR filetype:xlsx OR filetype:csv',
+                "Social Postings": f'("{clean_phone}" OR "{phone_input}") site:facebook.com OR site:twitter.com OR site:linkedin.com'
+            }
+            for label, query_str in dorks.items():
+                st.markdown(f"**{label}**")
+                st.code(query_str)
+                st.link_button(f"Search {label}", f"https://www.google.com/search?q={urllib.parse.quote(query_str)}")
+                save_finding(active_case, "Phone OSINT Dorks", f"{label} ({clean_phone})", query_str)
+
+# 🛠️ DORK STUDIO
+with tab5:
+    st.header("Search Engine Dorking Studio")
+    st.write("Construct targeted parameters to find open indices, leaks, and server configuration files.")
+    
+    dork_target = st.text_input("Dork Query Target", placeholder="e.g. company.com or username123")
+    dork_type = st.selectbox("Target Entity Type", ["Domain (company.com)", "Username/Handle", "Email Address", "Organization Name"])
+    
+    if st.button("Build Dork Studio Logs"):
+        if dork_target:
+            ttype = dork_type.split(" ")[0].lower()
+            dorks = []
+            
+            if ttype == "domain":
+                dorks = [
+                    {"label": "Directory Listings", "query": f'site:{dork_target} intitle:"index of"'},
+                    {"label": "Sensitive Formats", "query": f'site:{dork_target} filetype:pdf OR filetype:doc OR filetype:xls'},
+                    {"label": "DB & Backup files", "query": f'site:{dork_target} filetype:sql OR filetype:db OR filetype:bak'},
+                    {"label": "Config & Env variables", "query": f'site:{dork_target} filetype:env OR filetype:conf OR filetype:config'},
+                    {"label": "Subdomain discovery", "query": f'site:*.{dork_target} -site:www.{dork_target}'}
+                ]
+            elif ttype == "username":
+                dorks = [
+                    {"label": "Social Mentions", "query": f'"{dork_target}" site:facebook.com OR site:twitter.com OR site:linkedin.com'},
+                    {"label": "Developer Repos", "query": f'"{dork_target}" site:github.com OR site:gitlab.com'},
+                    {"label": "Public Leak pastes", "query": f'"{dork_target}" site:pastebin.com OR site:controlc.com'}
+                ]
+            elif ttype == "email":
+                dorks = [
+                    {"label": "Credential leaks", "query": f'"{dork_target}" filetype:txt OR filetype:csv OR filetype:sql'},
+                    {"label": "Pastebin logs", "query": f'"{dork_target}" site:pastebin.com OR site:controlc.com'}
+                ]
+            else:
+                dorks = [
+                    {"label": "S3 Cloud buckets", "query": f'"{dork_target}" site:amazonaws.com OR site:googleapis.com'},
+                    {"label": "Staff profiles", "query": f'site:linkedin.com/in/ "{dork_target}"'}
+                ]
+                
+            for dk in dorks:
+                st.markdown(f"**{dk['label']}**")
+                st.code(dk['query'])
+                st.link_button(f"Run {dk['label']}", f"https://www.google.com/search?q={urllib.parse.quote(dk['query'])}")
+                save_finding(active_case, "Google Dorks Studio", f"{dk['label']} ({dork_target})", dk['query'])
+            st.success("Dorks generated and logged to vault.")
+
+# 📁 CASE VAULT REPORTING
+with tab6:
+    st.header("Case Evidence File Repository")
     if active_case != "-- Select Active Case --":
         findings = get_findings(active_case)
         if findings:
+            # Map database keys to visual table headers
             df = pd.DataFrame(findings)
+            df.columns = ["Category", "Label", "Value", "Timestamp"]
             st.dataframe(df, use_container_width=True)
             
-            # Export CSV Action
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Download Evidence CSV Ledger",
                 data=csv,
-                file_name=f"IG_INT_LEDGER_{active_case}.csv",
+                file_name=f"ONSINT_LEDGER_{active_case}.csv",
                 mime="text/csv"
             )
         else:

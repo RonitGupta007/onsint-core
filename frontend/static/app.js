@@ -27,38 +27,7 @@ const elements = {
     tabButtons: document.querySelectorAll(".tab-btn"),
     tabContents: document.querySelectorAll(".tab-content"),
     
-    // Tab 1: Direct Profiling
-    directUsername: document.getElementById("direct-username"),
-    btnFetchDirect: document.getElementById("btn-fetch-direct"),
-    directResultsGrid: document.getElementById("direct-results-grid"),
-    directUid: document.getElementById("direct-uid"),
-    directMirrorsList: document.getElementById("direct-mirrors-list"),
-    manualUidHelper: document.getElementById("manual-uid-helper"),
-    manualUidInput: document.getElementById("manual-uid-input"),
-    btnSaveManualUid: document.getElementById("btn-save-manual-uid"),
-
-    
-    // Tab 2: Email to Username
-    targetEmail: document.getElementById("target-email"),
-    btnFetchEmail: document.getElementById("btn-fetch-email"),
-    emailResultsGrid: document.getElementById("email-results-grid"),
-    emailCandidatesContainer: document.getElementById("email-candidates-container"),
-    emailDomainName: document.getElementById("email-domain-name"),
-    emailMxStatus: document.getElementById("email-mx-status"),
-    emailMxServers: document.getElementById("email-mx-servers"),
-    
-    // Tab 3: Environment Scanner
-    envUsername: document.getElementById("env-username"),
-    btnFetchEnv: document.getElementById("btn-fetch-env"),
-    envResultsGrid: document.getElementById("env-results-grid"),
-    envDorksContainer: document.getElementById("env-dorks-container"),
-    envCity: document.getElementById("env-city"),
-    btnSearchCity: document.getElementById("btn-search-city"),
-    cityDorkOutput: document.getElementById("city-dork-output"),
-    cityDorkCode: document.getElementById("city-dork-code"),
-    cityDorkLink: document.getElementById("city-dork-link"),
-    
-    // Tab 4: Digital Footprint
+    // Tab: Username Search
     footprintUsername: document.getElementById("footprint-username"),
     scanCategoryCheckboxes: document.getElementById("scan-category-checkboxes"),
     btnStartScan: document.getElementById("btn-start-scan"),
@@ -69,72 +38,128 @@ const elements = {
     scanHitsBadge: document.getElementById("scan-hits-badge"),
     scanResultsTbody: document.getElementById("scan-results-tbody"),
     
-    // Tab 5: Case Vault
+    // Tab: Domain Intel
+    targetDomain: document.getElementById("target-domain"),
+    btnFetchDomain: document.getElementById("btn-fetch-domain"),
+    domainResultsGrid: document.getElementById("domain-results-grid"),
+    dnsRecordsContainer: document.getElementById("dns-records-container"),
+    domainRegistrar: document.getElementById("domain-registrar"),
+    domainCreated: document.getElementById("domain-created"),
+    domainWhoisRaw: document.getElementById("domain-whois-raw"),
+    
+    // Tab: IP Intel
+    targetIp: document.getElementById("target-ip"),
+    btnFetchIp: document.getElementById("btn-fetch-ip"),
+    ipResultsGrid: document.getElementById("ip-results-grid"),
+    ipCoords: document.getElementById("ip-coords"),
+    ipCity: document.getElementById("ip-city"),
+    ipCountry: document.getElementById("ip-country"),
+    ipIsp: document.getElementById("ip-isp"),
+    ipOrg: document.getElementById("ip-org"),
+    ipMapsLink: document.getElementById("ip-maps-link"),
+    
+    // Tab: Email Intel
+    targetEmail: document.getElementById("target-email"),
+    btnFetchEmail: document.getElementById("btn-fetch-email"),
+    emailResultsGrid: document.getElementById("email-results-grid"),
+    emailCandidatesContainer: document.getElementById("email-candidates-container"),
+    emailDomainName: document.getElementById("email-domain-name"),
+    emailMxStatus: document.getElementById("email-mx-status"),
+    emailMxServers: document.getElementById("email-mx-servers"),
+    emailDorksContainer: document.getElementById("email-dorks-container"),
+    
+    // Tab: Phone Resolver
+    targetPhone: document.getElementById("target-phone"),
+    phoneCountryCode: document.getElementById("phone-country-code"),
+    btnFetchPhone: document.getElementById("btn-fetch-phone"),
+    phoneResultsGrid: document.getElementById("phone-results-grid"),
+    phoneFormatted: document.getElementById("phone-formatted"),
+    phoneCountry: document.getElementById("phone-country"),
+    phoneDorksContainer: document.getElementById("phone-dorks-container"),
+    
+    // Tab: Dork Studio
+    dorkTarget: document.getElementById("dork-target"),
+    dorkTargetType: document.getElementById("dork-target-type"),
+    btnFetchDorks: document.getElementById("btn-fetch-dorks"),
+    dorksResultsCard: document.getElementById("dorks-results-card"),
+    studioDorksContainer: document.getElementById("studio-dorks-container"),
+    
+    // Tab: Case Vault
     vaultEmptyBanner: document.getElementById("vault-empty-banner"),
     vaultDataFrame: document.getElementById("vault-data-frame"),
     vaultTableTbody: document.getElementById("vault-table-tbody"),
     btnDownloadCsv: document.getElementById("btn-download-csv"),
     
-    // Tab 6: Connection Graph
+    // Tab: Connection Graph
     graphEmptyBanner: document.getElementById("graph-empty-banner"),
     graphDataFrame: document.getElementById("graph-data-frame"),
     networkGraph: document.getElementById("network-graph"),
     btnRefreshGraph: document.getElementById("btn-refresh-graph")
 };
 
-// --- INITIALIZATION ---
 document.addEventListener("DOMContentLoaded", () => {
     initTabs();
     initCopyButtons();
     loadCases();
     checkProxyStatus();
     renderCategories();
+    initResizableSidebar();
+    
+    // Sidebar toggle logic for mobile
+    const btnToggleSidebar = document.getElementById("btn-toggle-sidebar");
+    const sidebarEl = document.querySelector(".sidebar");
+    const sidebarOverlayEl = document.getElementById("sidebar-overlay");
+    
+    if (btnToggleSidebar && sidebarEl && sidebarOverlayEl) {
+        btnToggleSidebar.addEventListener("click", () => {
+            sidebarEl.classList.toggle("open");
+            sidebarOverlayEl.classList.toggle("active");
+        });
+        
+        sidebarOverlayEl.addEventListener("click", () => {
+            sidebarEl.classList.remove("open");
+            sidebarOverlayEl.classList.remove("active");
+        });
+        
+        const tabLinks = document.querySelectorAll(".tab-btn");
+        tabLinks.forEach(link => {
+            link.addEventListener("click", () => {
+                sidebarEl.classList.remove("open");
+                sidebarOverlayEl.classList.remove("active");
+            });
+        });
+    }
     
     // Event Listeners
     elements.btnCreateCase.addEventListener("click", handleCreateCase);
-    elements.activeCaseSelect.addEventListener("click", handleCaseSelect);
+    elements.activeCaseSelect.addEventListener("change", handleCaseSelect);
     elements.btnRefreshProxies.addEventListener("click", handleRefreshProxies);
-    elements.btnFetchDirect.addEventListener("click", handleDirectProfileQuery);
-    elements.btnFetchEmail.addEventListener("click", handleEmailQuery);
-    elements.btnFetchEnv.addEventListener("click", handleEnvQuery);
-    elements.btnSearchCity.addEventListener("click", handleCityQuery);
     elements.btnStartScan.addEventListener("click", handleFootprintScan);
+    elements.btnFetchDomain.addEventListener("click", handleDomainQuery);
+    elements.btnFetchIp.addEventListener("click", handleIpQuery);
+    elements.btnFetchEmail.addEventListener("click", handleEmailQuery);
+    elements.btnFetchPhone.addEventListener("click", handlePhoneQuery);
+    elements.btnFetchDorks.addEventListener("click", handleDorksQuery);
     elements.btnDownloadCsv.addEventListener("click", handleDownloadCSV);
     elements.btnRefreshGraph.addEventListener("click", loadConnectionGraph);
-    elements.btnSaveManualUid.addEventListener("click", handleSaveManualUid);
     
-    // Automatically keep username fields in sync
-    [elements.directUsername, elements.envUsername, elements.footprintUsername].forEach(input => {
-        input.addEventListener("input", (e) => {
-            syncUsernameGlobally(e.target.value);
-        });
+    // Automatically keep input targets in sync where relevant
+    elements.footprintUsername.addEventListener("input", (e) => {
+        state.targetUsername = e.target.value;
     });
 });
 
 // --- STATE SYNCING ---
-function syncUsernameGlobally(val) {
-    state.targetUsername = val;
-    elements.directUsername.value = val;
-    elements.envUsername.value = val;
-    elements.footprintUsername.value = val;
-}
-
 function updateStatsBanner() {
     elements.statActiveCase.innerText = state.activeCase ? state.activeCase : "Unlinked";
     elements.statFindingsCount.innerText = state.findingsCount;
     elements.statProxyStatus.innerText = state.proxyCount > 0 ? `${state.proxyCount} IPs Active` : "Direct Routing";
     
-    if (state.activeCase) {
-        elements.vaultEmptyBanner.style.display = "none";
-        elements.vaultDataFrame.style.display = "block";
-        elements.graphEmptyBanner.style.display = "none";
-        elements.graphDataFrame.style.display = "block";
-    } else {
-        elements.vaultEmptyBanner.style.display = "flex";
-        elements.vaultDataFrame.style.display = "none";
-        elements.graphEmptyBanner.style.display = "flex";
-        elements.graphDataFrame.style.display = "none";
-    }
+    const hasCase = !!state.activeCase;
+    elements.vaultEmptyBanner.style.display = hasCase ? "none" : "flex";
+    elements.vaultDataFrame.style.display = hasCase ? "block" : "none";
+    elements.graphEmptyBanner.style.display = hasCase ? "none" : "flex";
+    elements.graphDataFrame.style.display = hasCase ? "block" : "none";
 }
 
 // --- TABS CONTROLS ---
@@ -156,7 +181,7 @@ function initTabs() {
                 }
             });
             
-            // Load case data if case vault tab selected
+            // Reload specific content if vault/graph is selected
             if (targetTab === "tab-vault") {
                 loadVaultFindings();
             } else if (targetTab === "tab-graph") {
@@ -199,7 +224,6 @@ async function loadCases() {
         const r = await fetch("/api/cases");
         const data = await r.json();
         
-        // Clear options except first
         elements.activeCaseSelect.innerHTML = '<option value="">-- Select Active Case --</option>';
         data.cases.forEach(c => {
             const opt = document.createElement("option");
@@ -301,240 +325,38 @@ async function handleRefreshProxies() {
     }
 }
 
-// Tab 1: Direct Profiling
-async function handleDirectProfileQuery() {
-    const username = elements.directUsername.value.trim();
-    if (!username) return;
+// Reusable Dork Row Renderer
+function renderDorkItem(dk, index, prefix) {
+    const item = document.createElement("div");
+    item.className = "dork-item";
     
-    elements.btnFetchDirect.disabled = true;
-    elements.btnFetchDirect.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing';
-    
-    try {
-        const r = await fetch("/api/instagram/profile", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: username, case_name: state.activeCase })
-        });
-        
-        if (r.ok) {
-            const data = await r.json();
-            elements.directUid.innerText = data.user_id;
-            
-            // Show manual override helper if API rate-limited
-            if (data.user_id.includes("Manual Verification Required")) {
-                elements.manualUidHelper.style.display = "block";
-            } else {
-                elements.manualUidHelper.style.display = "none";
-            }
-            
-            // Build mirrors list
-            elements.directMirrorsList.innerHTML = "";
-            data.mirrors.forEach(m => {
-                const li = document.createElement("li");
-                const a = document.createElement("a");
-                a.href = m.url;
-                a.target = "_blank";
-                a.innerText = m.label;
-                li.appendChild(a);
-                elements.directMirrorsList.appendChild(li);
-            });
-            
-            elements.directResultsGrid.style.display = "grid";
-            await refreshFindingsCount();
-            updateStatsBanner();
-        }
-    } catch (e) {
-        console.error(e);
-    } finally {
-        elements.btnFetchDirect.disabled = false;
-        elements.btnFetchDirect.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Analyze';
+    const meta = document.createElement("div");
+    meta.className = "dork-meta";
+    meta.innerHTML = `<span class="dork-title">${dk.label}</span>`;
+    if (dk.desc) {
+        meta.innerHTML += `<span class="description" style="margin-bottom:0; display:block; font-size:0.75rem;">${dk.desc}</span>`;
     }
+    
+    const queryWrapper = document.createElement("div");
+    queryWrapper.className = "dork-query-wrapper";
+    
+    const codeId = `${prefix}-dork-code-${index}`;
+    queryWrapper.innerHTML = `
+        <code id="${codeId}">${dk.query}</code>
+        <button class="btn btn-copy" data-copy-target="${codeId}">
+            <i class="fa-regular fa-copy"></i>
+        </button>
+        <a href="${dk.url}" target="_blank" class="btn btn-secondary btn-sm">
+            <i class="fa-solid fa-square-arrow-up-right"></i> Open Query
+        </a>
+    `;
+    
+    item.appendChild(meta);
+    item.appendChild(queryWrapper);
+    return item;
 }
 
-async function handleSaveManualUid() {
-    const val = elements.manualUidInput.value.trim();
-    if (!val || !state.activeCase) return;
-    
-    elements.btnSaveManualUid.disabled = true;
-    elements.btnSaveManualUid.innerText = "Saving...";
-    
-    try {
-        const r = await fetch(`/api/cases/${encodeURIComponent(state.activeCase)}/findings`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                category: "Instagram Metadata",
-                label: "Permanent UserID",
-                value: val
-            })
-        });
-        
-        if (r.ok) {
-            elements.directUid.innerText = val;
-            elements.manualUidInput.value = "";
-            elements.manualUidHelper.style.display = "none";
-            await refreshFindingsCount();
-            updateStatsBanner();
-        }
-    } catch (e) {
-        console.error(e);
-    } finally {
-        elements.btnSaveManualUid.disabled = false;
-        elements.btnSaveManualUid.innerText = "Save";
-    }
-}
-
-// Tab 2: Email Permuter
-async function handleEmailQuery() {
-    const email = elements.targetEmail.value.trim();
-    if (!email) return;
-    
-    elements.btnFetchEmail.disabled = true;
-    elements.btnFetchEmail.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Resolving';
-    
-    try {
-        const r = await fetch("/api/email-heuristics", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: email, case_name: state.activeCase })
-        });
-        
-        if (r.ok) {
-            const data = await r.json();
-            elements.emailDomainName.innerText = `@${data.domain}`;
-            
-            // MX status classes
-            elements.emailMxStatus.innerText = data.mx_status;
-            if (data.mx_status === "Active") {
-                elements.emailMxStatus.className = "value badge-status active";
-            } else {
-                elements.emailMxStatus.className = "value badge-status error";
-            }
-            
-            // MX Servers
-            elements.emailMxServers.innerHTML = "";
-            if (data.mx_servers.length > 0) {
-                data.mx_servers.forEach(srv => {
-                    const li = document.createElement("li");
-                    li.innerText = srv;
-                    elements.emailMxServers.appendChild(li);
-                });
-            } else {
-                const li = document.createElement("li");
-                li.innerText = "No exchange servers verified.";
-                elements.emailMxServers.appendChild(li);
-            }
-            
-            // Username permutation buttons
-            elements.emailCandidatesContainer.innerHTML = "";
-            data.candidates.forEach(cand => {
-                const badge = document.createElement("button");
-                badge.className = "candidate-badge";
-                badge.innerHTML = `<i class="fa-solid fa-crosshair"></i> @${cand}`;
-                badge.addEventListener("click", () => {
-                    syncUsernameGlobally(cand);
-                    switchTab("tab-direct");
-                    handleDirectProfileQuery();
-                });
-                elements.emailCandidatesContainer.appendChild(badge);
-            });
-            
-            elements.emailResultsGrid.style.display = "grid";
-            await refreshFindingsCount();
-            updateStatsBanner();
-        }
-    } catch (e) {
-        console.error(e);
-    } finally {
-        elements.btnFetchEmail.disabled = false;
-        elements.btnFetchEmail.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Generate';
-    }
-}
-
-// Tab 3: Environment Scanner (Dorks)
-async function handleEnvQuery() {
-    const username = elements.envUsername.value.trim();
-    if (!username) return;
-    
-    elements.btnFetchEnv.disabled = true;
-    elements.btnFetchEnv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching';
-    
-    try {
-        const r = await fetch("/api/instagram/environment", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: username, case_name: state.activeCase })
-        });
-        
-        if (r.ok) {
-            const data = await r.json();
-            elements.envDorksContainer.innerHTML = "";
-            
-            data.dorks.forEach((dk, index) => {
-                const item = document.createElement("div");
-                item.className = "dork-item";
-                
-                const meta = document.createElement("div");
-                meta.className = "dork-meta";
-                meta.innerHTML = `<span class="dork-title">${dk.label}</span>`;
-                
-                const queryWrapper = document.createElement("div");
-                queryWrapper.className = "dork-query-wrapper";
-                
-                const codeId = `dork-code-${index}`;
-                queryWrapper.innerHTML = `
-                    <code id="${codeId}">${dk.query}</code>
-                    <button class="btn btn-copy" data-copy-target="${codeId}">
-                        <i class="fa-regular fa-copy"></i>
-                    </button>
-                    <a href="${dk.url}" target="_blank" class="btn btn-secondary btn-sm">
-                        <i class="fa-solid fa-square-arrow-up-right"></i> Open
-                    </a>
-                `;
-                
-                item.appendChild(meta);
-                item.appendChild(queryWrapper);
-                elements.envDorksContainer.appendChild(item);
-            });
-            
-            elements.envResultsGrid.style.display = "grid";
-            await refreshFindingsCount();
-            updateStatsBanner();
-        }
-    } catch (e) {
-        console.error(e);
-    } finally {
-        elements.btnFetchEnv.disabled = false;
-        elements.btnFetchEnv.innerHTML = '<i class="fa-solid fa-network-wired"></i> Map Ecosystem';
-    }
-}
-
-async function handleCityQuery() {
-    const username = elements.envUsername.value.trim();
-    const city = elements.envCity.value.trim();
-    if (!username || !city) return;
-    
-    try {
-        const r = await fetch("/api/instagram/geotag", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: username, city: city, case_name: state.activeCase })
-        });
-        
-        if (r.ok) {
-            const data = await r.json();
-            elements.cityDorkCode.innerText = data.dork;
-            elements.cityDorkLink.href = data.url;
-            elements.cityDorkOutput.style.display = "block";
-            await refreshFindingsCount();
-            updateStatsBanner();
-        }
-    } catch (e) {
-        console.error(e);
-    }
-}
-
-// Tab 4: Digital Footprint
+// --- Tab: Username Scan ---
 function renderCategories() {
     elements.scanCategoryCheckboxes.innerHTML = "";
     state.categories.forEach(cat => {
@@ -550,7 +372,6 @@ function renderCategories() {
                 label.classList.remove("checked");
             }
         });
-        
         elements.scanCategoryCheckboxes.appendChild(label);
     });
 }
@@ -559,19 +380,16 @@ async function handleFootprintScan() {
     const username = elements.footprintUsername.value.trim();
     if (!username) return;
     
-    // Get categories checked
     const checkedBoxes = elements.scanCategoryCheckboxes.querySelectorAll("input:checked");
     const categoriesSelected = Array.from(checkedBoxes).map(b => b.value);
     
-    // UI adjustments
     elements.btnStartScan.disabled = true;
     elements.btnStartScan.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning endpoints';
     elements.scanProgressFrame.style.display = "block";
     elements.scanProgressBar.style.width = "0%";
-    elements.scanStatusLabel.innerText = "Querying platforms...";
+    elements.scanStatusLabel.innerText = "Querying platform endpoints...";
     elements.scanResultsCard.style.display = "none";
     
-    // Simulate smooth progress loading
     let percent = 0;
     const interval = setInterval(() => {
         if (percent < 90) {
@@ -597,8 +415,6 @@ async function handleFootprintScan() {
         
         if (r.ok) {
             const data = await r.json();
-            
-            // Build findings rows
             elements.scanResultsTbody.innerHTML = "";
             elements.scanHitsBadge.innerText = `${data.results.length} Found`;
             
@@ -640,7 +456,261 @@ async function handleFootprintScan() {
     }
 }
 
-// Tab 5: Case Vault table
+// --- Tab: Domain Intel ---
+async function handleDomainQuery() {
+    const domain = elements.targetDomain.value.trim();
+    if (!domain) return;
+    
+    elements.btnFetchDomain.disabled = true;
+    elements.btnFetchDomain.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing';
+    
+    try {
+        // Query DNS Records
+        const rDns = await fetch("/api/domain/dns", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain: domain, case_name: state.activeCase })
+        });
+        
+        // Query WHOIS
+        const rWhois = await fetch("/api/domain/whois", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain: domain, case_name: state.activeCase })
+        });
+        
+        if (rDns.ok && rWhois.ok) {
+            const dnsData = await rDns.json();
+            const whoisData = await rWhois.json();
+            
+            // Render DNS records
+            elements.dnsRecordsContainer.innerHTML = "";
+            let hasRecords = false;
+            
+            for (const [rtype, vals] of Object.entries(dnsData.records)) {
+                if (vals.length > 0) {
+                    hasRecords = true;
+                    const card = document.createElement("div");
+                    card.style.marginBottom = "1.25rem";
+                    card.innerHTML = `
+                        <h5 style="color:var(--primary); font-weight:700; margin-bottom:0.4rem;">${rtype} Records</h5>
+                        <ul class="servers-list" style="margin-top:0;">
+                            ${vals.map(v => `<li>${v}</li>`).join("")}
+                        </ul>
+                    `;
+                    elements.dnsRecordsContainer.appendChild(card);
+                }
+            }
+            if (!hasRecords) {
+                elements.dnsRecordsContainer.innerHTML = '<p class="description">No DNS resolution records found.</p>';
+            }
+            
+            // Render WHOIS records
+            elements.domainRegistrar.innerText = whoisData.registrar;
+            elements.domainCreated.innerText = whoisData.creation_date;
+            elements.domainWhoisRaw.innerText = whoisData.raw;
+            
+            elements.domainResultsGrid.style.display = "grid";
+            await refreshFindingsCount();
+            updateStatsBanner();
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        elements.btnFetchDomain.disabled = false;
+        elements.btnFetchDomain.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Analyze Domain';
+    }
+}
+
+// --- Tab: IP Intel ---
+async function handleIpQuery() {
+    const ip = elements.targetIp.value.trim();
+    if (!ip) return;
+    
+    elements.btnFetchIp.disabled = true;
+    elements.btnFetchIp.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Geolocating';
+    
+    try {
+        const r = await fetch("/api/ip/geoip", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ip: ip, case_name: state.activeCase })
+        });
+        
+        if (r.ok) {
+            const data = await r.json();
+            elements.ipCoords.innerText = `${data.lat}, ${data.lon}`;
+            elements.ipCity.innerText = data.city;
+            elements.ipCountry.innerText = data.country;
+            elements.ipIsp.innerText = data.isp;
+            elements.ipOrg.innerText = data.org;
+            elements.ipMapsLink.href = `https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lon}`;
+            
+            elements.ipResultsGrid.style.display = "grid";
+            await refreshFindingsCount();
+            updateStatsBanner();
+        } else {
+            const err = await r.json();
+            alert(err.detail || "IP lookup failed.");
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        elements.btnFetchIp.disabled = false;
+        elements.btnFetchIp.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> Geolocate IP';
+    }
+}
+
+// --- Tab: Email Intel ---
+async function handleEmailQuery() {
+    const email = elements.targetEmail.value.trim();
+    if (!email) return;
+    
+    elements.btnFetchEmail.disabled = true;
+    elements.btnFetchEmail.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Resolving';
+    
+    try {
+        const r = await fetch("/api/email/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email, case_name: state.activeCase })
+        });
+        
+        if (r.ok) {
+            const data = await r.json();
+            elements.emailDomainName.innerText = `@${data.domain}`;
+            elements.emailMxStatus.innerText = data.mx_status;
+            
+            if (data.mx_status === "Active") {
+                elements.emailMxStatus.className = "value badge-status active";
+            } else {
+                elements.emailMxStatus.className = "value badge-status error";
+            }
+            
+            // MX Servers
+            elements.emailMxServers.innerHTML = "";
+            if (data.mx_servers.length > 0) {
+                data.mx_servers.forEach(srv => {
+                    const li = document.createElement("li");
+                    li.innerText = srv;
+                    elements.emailMxServers.appendChild(li);
+                });
+            } else {
+                const li = document.createElement("li");
+                li.innerText = "No exchange servers verified.";
+                elements.emailMxServers.appendChild(li);
+            }
+            
+            // Username badge recommendations
+            elements.emailCandidatesContainer.innerHTML = "";
+            data.candidates.forEach(cand => {
+                const badge = document.createElement("button");
+                badge.className = "candidate-badge";
+                badge.innerHTML = `<i class="fa-solid fa-crosshair"></i> @${cand}`;
+                badge.addEventListener("click", () => {
+                    elements.footprintUsername.value = cand;
+                    state.targetUsername = cand;
+                    switchTab("tab-username");
+                    handleFootprintScan();
+                });
+                elements.emailCandidatesContainer.appendChild(badge);
+            });
+            
+            // Leak queries
+            elements.emailDorksContainer.innerHTML = "";
+            data.dorks.forEach((dk, idx) => {
+                const row = renderDorkItem(dk, idx, "email-leak");
+                elements.emailDorksContainer.appendChild(row);
+            });
+            
+            elements.emailResultsGrid.style.display = "grid";
+            await refreshFindingsCount();
+            updateStatsBanner();
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        elements.btnFetchEmail.disabled = false;
+        elements.btnFetchEmail.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Analyze Email';
+    }
+}
+
+// --- Tab: Phone Resolver ---
+async function handlePhoneQuery() {
+    const phone = elements.targetPhone.value.trim();
+    if (!phone) return;
+    
+    const countryCode = elements.phoneCountryCode.value;
+    elements.btnFetchPhone.disabled = true;
+    elements.btnFetchPhone.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Resolving';
+    
+    try {
+        const r = await fetch("/api/phone/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: phone, country_code: countryCode, case_name: state.activeCase })
+        });
+        
+        if (r.ok) {
+            const data = await r.json();
+            elements.phoneFormatted.innerText = data.phone;
+            elements.phoneCountry.innerText = data.country;
+            
+            elements.phoneDorksContainer.innerHTML = "";
+            data.dorks.forEach((dk, idx) => {
+                const row = renderDorkItem(dk, idx, "phone-osint");
+                elements.phoneDorksContainer.appendChild(row);
+            });
+            
+            elements.phoneResultsGrid.style.display = "grid";
+            await refreshFindingsCount();
+            updateStatsBanner();
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        elements.btnFetchPhone.disabled = false;
+        elements.btnFetchPhone.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Decode Number';
+    }
+}
+
+// --- Tab: Dork Studio ---
+async function handleDorksQuery() {
+    const target = elements.dorkTarget.value.trim();
+    if (!target) return;
+    
+    const type = elements.dorkTargetType.value;
+    elements.btnFetchDorks.disabled = true;
+    elements.btnFetchDorks.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Building';
+    
+    try {
+        const r = await fetch("/api/dorks/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ target: target, target_type: type, case_name: state.activeCase })
+        });
+        
+        if (r.ok) {
+            const data = await r.json();
+            elements.studioDorksContainer.innerHTML = "";
+            data.dorks.forEach((dk, idx) => {
+                const row = renderDorkItem(dk, idx, "dork-studio");
+                elements.studioDorksContainer.appendChild(row);
+            });
+            
+            elements.dorksResultsCard.style.display = "block";
+            await refreshFindingsCount();
+            updateStatsBanner();
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        elements.btnFetchDorks.disabled = false;
+        elements.btnFetchDorks.innerHTML = '<i class="fa-solid fa-terminal"></i> Build Queries';
+    }
+}
+
+// --- Tab: Case Vault ---
 async function loadVaultFindings() {
     if (!state.activeCase) return;
     
@@ -676,7 +746,6 @@ async function loadVaultFindings() {
     }
 }
 
-// CSV Exporter
 async function handleDownloadCSV() {
     if (!state.activeCase) return;
     
@@ -689,7 +758,6 @@ async function handleDownloadCSV() {
             return;
         }
         
-        // Escape helper
         const escapeCSV = (val) => {
             if (val === null || val === undefined) return '';
             const stringified = String(val);
@@ -699,20 +767,16 @@ async function handleDownloadCSV() {
             return stringified;
         };
         
-        // Header
         let csvContent = "Category,Property,Value,Timestamp\n";
-        
-        // Rows
         data.findings.forEach(f => {
             csvContent += `${escapeCSV(f.category)},${escapeCSV(f.label)},${escapeCSV(f.value)},${escapeCSV(f.timestamp)}\n`;
         });
         
-        // Trigger download
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.setAttribute("href", url);
-        link.setAttribute("download", `IG_INT_LEDGER_${state.activeCase}.csv`);
+        link.setAttribute("download", `ONSINT_LEDGER_${state.activeCase}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
@@ -722,7 +786,7 @@ async function handleDownloadCSV() {
     }
 }
 
-// --- Tab 6: Vis.js Connection Graph Logic ---
+// --- Tab: Connection Graph ---
 let networkInstance = null;
 
 async function loadConnectionGraph() {
@@ -739,9 +803,8 @@ async function loadConnectionGraph() {
         const r = await fetch(`/api/cases/${encodeURIComponent(state.activeCase)}/graph`);
         const data = await r.json();
         
-        // Custom stylings for different node groups
         const nodes = data.nodes.map(n => {
-            let color = "#64748b"; // default slate
+            let color = "#64748b"; // slate
             let shape = "dot";
             let size = 16;
             
@@ -842,3 +905,50 @@ async function loadConnectionGraph() {
     }
 }
 
+// --- RESIZABLE SIDEBAR LOGIC ---
+function initResizableSidebar() {
+    const resizer = document.getElementById("sidebar-resizer");
+    const sidebar = document.querySelector(".sidebar");
+    if (!resizer || !sidebar) return;
+    
+    // Restore sidebar width from localStorage if exists
+    const savedWidth = localStorage.getItem("onsint-sidebar-width");
+    if (savedWidth) {
+        sidebar.style.width = `${savedWidth}px`;
+        // Delay resize event slightly to ensure DOM is fully laid out
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 100);
+    }
+    
+    let isResizing = false;
+    
+    resizer.addEventListener("mousedown", (e) => {
+        isResizing = true;
+        resizer.classList.add("active");
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+    });
+    
+    document.addEventListener("mousemove", (e) => {
+        if (!isResizing) return;
+        // Bounded resizing: constrain sidebar width between 240px and 480px
+        const newWidth = Math.max(240, Math.min(480, e.clientX));
+        sidebar.style.width = `${newWidth}px`;
+        
+        // Trigger window resize event so vis.js canvas scales immediately
+        window.dispatchEvent(new Event('resize'));
+    });
+    
+    document.addEventListener("mouseup", () => {
+        if (isResizing) {
+            isResizing = false;
+            resizer.classList.remove("active");
+            document.body.style.cursor = "default";
+            document.body.style.userSelect = "auto";
+            
+            // Save width to localStorage
+            localStorage.setItem("onsint-sidebar-width", parseInt(sidebar.style.width));
+        }
+    });
+}

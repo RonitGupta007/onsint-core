@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ONSINT Core is a premium general-purpose OSINT dashboard for username search, domain DNS/WHOIS queries, IP geolocation, email intelligence, phone resolving, and interactive connection mapping.">
+    <title>ONSINT Core - General Purpose OSINT Intelligence Suite</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Vis.js for Network Graphing -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        .whois-raw-container {
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            color: #4ade80;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-area">
+                    <i class="fa-solid fa-satellite-dish logo-icon"></i>
+                    <h2>ONSINT <span>Core</span></h2>
+                </div>
+                <p class="subtitle">General Purpose OSINT Suite</p>
+            </div>
+            
+            <div class="sidebar-content">
+                <!-- Case File Section -->
+                <div class="sidebar-section">
+                    <h3><i class="fa-solid fa-folder-open"></i> Case File Registry</h3>
+                    <div class="case-creation">
+                        <input type="text" id="new-case-name" placeholder="e.g. Case_2026_Audit" autocomplete="off">
+                        <button id="btn-create-case" class="btn btn-secondary">
+                            <i class="fa-solid fa-plus"></i> Initialize
+                        </button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="active-case-select">Active Case File</label>
+                        <div class="select-wrapper">
+                            <select id="active-case-select">
+                                <option value="">-- Select Active Case --</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down select-chevron"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Stealth Proxy Controls -->
+                <div class="sidebar-section">
+                    <h3><i class="fa-solid fa-shield-halved"></i> Stealth Proxy Controls</h3>
+                    <button id="btn-refresh-proxies" class="btn btn-gradient w-100">
+                        <i class="fa-solid fa-rotate"></i> Scrape & Cycle Proxies
+                    </button>
+                    
+                    <div class="proxy-status-card" id="proxy-status-card">
+                        <div class="status-indicator">
+                            <span class="status-dot warning" id="proxy-dot"></span>
+                            <span class="status-text" id="proxy-status-text">Direct IP (No Proxy)</span>
+                        </div>
+                        <div class="proxy-count" id="proxy-count-text">0 IPs Scraped</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <p>System version: 3.0.0 (ONSINT Core API)</p>
+                <p class="author-credits" style="font-weight: 500; color: var(--text-muted);"><i class="fa-solid fa-user-ninja" style="color: var(--primary); margin-right: 0.25rem;"></i> Made by <strong>Ronit Gupta</strong></p>
+                <div class="status-ping">
+                    <span class="ping-dot"></span>
+                    <span>Backend Server Live</span>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Sidebar Resizer Splitter Drag Bar -->
+        <div class="sidebar-resizer" id="sidebar-resizer"></div>
+        
+        <!-- MAIN DASHBOARD -->
+        <main class="main-dashboard">
+            <!-- Mobile Header Bar -->
+            <div class="mobile-header">
+                <button id="btn-toggle-sidebar" class="btn-menu">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="mobile-logo">
+                    <i class="fa-solid fa-satellite-dish logo-icon"></i>
+                    <h2>ONSINT <span>Core</span></h2>
+                </div>
+            </div>
+            
+            <!-- HEADER METRIC CARDS -->
+            <header class="dashboard-header">
+                <div class="metric-card">
+                    <div class="metric-icon purple"><i class="fa-solid fa-briefcase"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-label">Active Case File</span>
+                        <h3 class="metric-value" id="stat-active-case">Unlinked</h3>
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-icon pink"><i class="fa-solid fa-database"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-label">Recorded Evidence</span>
+                        <h3 class="metric-value" id="stat-findings-count">0</h3>
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-icon blue"><i class="fa-solid fa-globe"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-label">Proxy Status</span>
+                        <h3 class="metric-value" id="stat-proxy-status">Direct Routing</h3>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- SYSTEM WORKSPACE & TABS -->
+            <section class="workspace-card">
+                <div class="tab-navigation">
+                    <button class="tab-btn active" data-tab="tab-username">
+                        <i class="fa-solid fa-user-ninja"></i> Username Scan
+                    </button>
+                    <button class="tab-btn" data-tab="tab-domain">
+                        <i class="fa-solid fa-globe"></i> Domain Intel
+                    </button>
+                    <button class="tab-btn" data-tab="tab-ip">
+                        <i class="fa-solid fa-network-wired"></i> IP Intel
+                    </button>
+                    <button class="tab-btn" data-tab="tab-email">
+                        <i class="fa-solid fa-envelope"></i> Email Intel
+                    </button>
+                    <button class="tab-btn" data-tab="tab-phone">
+                        <i class="fa-solid fa-phone"></i> Phone Resolver
+                    </button>
+                    <button class="tab-btn" data-tab="tab-dork">
+                        <i class="fa-solid fa-magnifying-glass-nodes"></i> Dork Studio
+                    </button>
+                    <button class="tab-btn" data-tab="tab-vault">
+                        <i class="fa-solid fa-vault"></i> Case Vault
+                    </button>
+                    <button class="tab-btn" data-tab="tab-graph">
+                        <i class="fa-solid fa-circle-nodes"></i> Connection Graph
+                    </button>
+                </div>
+                
+                <div class="tab-content-container">
+                    
+                    <!-- TAB 1: USERNAME PROFILE SCANNER -->
+                    <div class="tab-content active" id="tab-username">
+                        <div class="section-title">
+                            <h2>Username Search & Digital Footprint</h2>
+                            <p>Verify handle deployment across multiple online registries using concurrent requests and signature checks.</p>
+                        </div>
+                        
+                        <div class="scanner-setup card glass mb-4">
+                            <div class="card-body row-flex">
+                                <div class="form-group flex-2">
+                                    <label for="footprint-username">Audit Username Handle</label>
+                                    <div class="input-icon-wrapper">
+                                        <i class="fa-brands fa-searchengin input-icon-left"></i>
+                                        <input type="text" id="footprint-username" placeholder="e.g. john_doe_99" autocomplete="off">
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group flex-3">
+                                    <label>Network Categories Filter</label>
+                                    <div class="checkbox-group" id="scan-category-checkboxes">
+                                        <!-- Populated via JS -->
+                                    </div>
+                                </div>
+                                
+                                <div class="btn-align-end">
+                                    <button class="btn btn-gradient" id="btn-start-scan">
+                                        <i class="fa-solid fa-bolt"></i> Start High-Precision Scan
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Progress Frame -->
+                        <div class="scan-progress-frame" id="scan-progress-frame" style="display: none;">
+                            <div class="progress-info">
+                                <span class="pulse-icon"><i class="fa-solid fa-spinner fa-spin"></i></span>
+                                <span id="scan-status-label">Auditing network endpoints...</span>
+                            </div>
+                            <div class="progress-bar-bg">
+                                <div class="progress-bar-fill" id="scan-progress-bar"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Scan Results Table -->
+                        <div class="scan-results-container card glass" id="scan-results-card" style="display: none;">
+                            <div class="card-header">
+                                <i class="fa-solid fa-list-check"></i>
+                                <h4>Detected Digital Profiles</h4>
+                                <span class="badge" id="scan-hits-badge">0 Found</span>
+                            </div>
+                            <div class="table-wrapper">
+                                <table class="data-table" id="scan-results-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Platform</th>
+                                            <th>Category</th>
+                                            <th>Deployment Status</th>
+                                            <th>Direct Target Link</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="scan-results-tbody">
+                                        <!-- Scan entries -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- TAB 2: DOMAIN INTEL -->
+                    <div class="tab-content" id="tab-domain">
+                        <div class="section-title">
+                            <h2>Domain Intelligence & WHOIS Registry</h2>
+                            <p>Query authoritative DNS resolution endpoints and fetch registrar ownership data logs.</p>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label for="target-domain">Target Domain Name</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa-solid fa-globe input-icon-left"></i>
+                                    <input type="text" id="target-domain" placeholder="e.g. example.com" autocomplete="off">
+                                    <button class="btn btn-primary" id="btn-fetch-domain">
+                                        <i class="fa-solid fa-magnifying-glass"></i> Analyze Domain
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="results-grid" id="domain-results-grid" style="display: none;">
+                            <!-- DNS Records -->
+                            <div class="card glass">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-server"></i>
+                                    <h4>DNS Resolution Records</h4>
+                                </div>
+                                <div class="card-body">
+                                    <p class="description">Active mapping endpoints configured on the domain.</p>
+                                    <div class="dns-records-container" id="dns-records-container">
+                                        <!-- Populated via JS -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- WHOIS Data -->
+                            <div class="card glass">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-address-card"></i>
+                                    <h4>WHOIS Ownership Summary</h4>
+                                </div>
+                                <div class="card-body">
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">Registrar:</span>
+                                        <span class="value" id="domain-registrar">...</span>
+                                    </div>
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">Creation Date:</span>
+                                        <span class="value" id="domain-created">...</span>
+                                    </div>
+                                    
+                                    <h5>Raw WHOIS Output Log:</h5>
+                                    <pre class="whois-raw-container" id="domain-whois-raw">Loading raw WHOIS details...</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- TAB 3: IP INTEL -->
+                    <div class="tab-content" id="tab-ip">
+                        <div class="section-title">
+                            <h2>IP Geolocation & Routing Intel</h2>
+                            <p>Query geological nodes, service providers, and global routing systems for targeted IP endpoints.</p>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label for="target-ip">Target IP or Domain Address</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa-solid fa-network-wired input-icon-left"></i>
+                                    <input type="text" id="target-ip" placeholder="e.g. 8.8.8.8" autocomplete="off">
+                                    <button class="btn btn-primary" id="btn-fetch-ip">
+                                        <i class="fa-solid fa-location-crosshairs"></i> Geolocate IP
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="results-grid" id="ip-results-grid" style="display: none;">
+                            <!-- GeoIP Details -->
+                            <div class="card glass">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-compass"></i>
+                                    <h4>Geological Location Properties</h4>
+                                </div>
+                                <div class="card-body">
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">Physical Coordinates:</span>
+                                        <span class="value font-mono" id="ip-coords">...</span>
+                                    </div>
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">City Location:</span>
+                                        <span class="value" id="ip-city">...</span>
+                                    </div>
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">Country Node:</span>
+                                        <span class="value" id="ip-country">...</span>
+                                    </div>
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">ISP Provider:</span>
+                                        <span class="value" id="ip-isp">...</span>
+                                    </div>
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">Organization:</span>
+                                        <span class="value" id="ip-org">...</span>
+                                    </div>
+                                    <a href="#" target="_blank" id="ip-maps-link" class="btn btn-secondary mt-3 text-center w-100">
+                                        <i class="fa-solid fa-map-location-dot"></i> View on Google Maps
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- TAB 4: EMAIL INTEL -->
+                    <div class="tab-content" id="tab-email">
+                        <div class="section-title">
+                            <h2>Email Intelligence & Pivot Generator</h2>
+                            <p>Verify mail routing exchangers, permutate handle candidates, and build public leak dorks.</p>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label for="target-email">Target Email Address</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa-regular fa-envelope input-icon-left"></i>
+                                    <input type="email" id="target-email" placeholder="e.g. john.doe99@gmail.com" autocomplete="off">
+                                    <button class="btn btn-primary" id="btn-fetch-email">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze Email
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="results-grid" id="email-results-grid" style="display: none;">
+                            <!-- Permutated Candidates -->
+                            <div class="card glass">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-brain"></i>
+                                    <h4>Username Candidates</h4>
+                                </div>
+                                <div class="card-body">
+                                    <p class="description">Permutations derived from email composition. Click a choice to scan it globally:</p>
+                                    <div class="candidate-badges" id="email-candidates-container">
+                                        <!-- Populated via JS -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Mail Exchanges and MX Status -->
+                            <div class="card glass">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-mail-forward"></i>
+                                    <h4>Mail Exchanger Details</h4>
+                                </div>
+                                <div class="card-body">
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">Host Domain:</span>
+                                        <span class="value" id="email-domain-name">...</span>
+                                    </div>
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">MX Status:</span>
+                                        <span class="value badge-status" id="email-mx-status">Checking...</span>
+                                    </div>
+                                    
+                                    <h5>MX Servers list:</h5>
+                                    <ul class="servers-list" id="email-mx-servers">
+                                        <!-- Populated via JS -->
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- Leak Dorks -->
+                            <div class="card glass flex-2-col" style="grid-column: span 2;">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <h4>Credential & Leak Audit Queries</h4>
+                                </div>
+                                <div class="card-body">
+                                    <p class="description">Queries to search paste bins, databases, and logs for leaked credentials associated with this email:</p>
+                                    <div class="dorks-container" id="email-dorks-container">
+                                        <!-- Populated via JS -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- TAB 5: PHONE RESOLVER -->
+                    <div class="tab-content" id="tab-phone">
+                        <div class="section-title">
+                            <h2>Phone Number Decoder & Dorking</h2>
+                            <p>Verify dial structures, resolve international country prefixes, and locate mentions in open dumps.</p>
+                        </div>
+                        
+                        <div class="form-row row-flex">
+                            <div class="form-group flex-2">
+                                <label for="target-phone">Target Phone Number</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa-solid fa-phone input-icon-left"></i>
+                                    <input type="text" id="target-phone" placeholder="e.g. +1 (555) 123-4567" autocomplete="off" style="padding-left: 2.75rem;">
+                                </div>
+                            </div>
+                            
+                            <div class="form-group flex-1">
+                                <label for="phone-country-code">Default Country Prefix (Optional)</label>
+                                <div class="select-wrapper">
+                                    <select id="phone-country-code">
+                                        <option value="">-- Auto-Detect / Lead + --</option>
+                                        <option value="1">US/Canada (+1)</option>
+                                        <option value="44">United Kingdom (+44)</option>
+                                        <option value="91">India (+91)</option>
+                                        <option value="61">Australia (+61)</option>
+                                        <option value="33">France (+33)</option>
+                                        <option value="49">Germany (+49)</option>
+                                        <option value="81">Japan (+81)</option>
+                                    </select>
+                                    <i class="fa-solid fa-chevron-down select-chevron"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="btn-align-end">
+                                <button class="btn btn-primary" id="btn-fetch-phone" style="height: 43px; padding: 0 1.5rem; border-radius: 8px;">
+                                    <i class="fa-solid fa-magnifying-glass"></i> Decode Number
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="results-grid" id="phone-results-grid" style="display: none;">
+                            <!-- Phone Metadata -->
+                            <div class="card glass">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    <h4>Validation & Prefix Properties</h4>
+                                </div>
+                                <div class="card-body">
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">E.164 Formatted:</span>
+                                        <span class="value font-mono" id="phone-formatted">...</span>
+                                    </div>
+                                    <div class="domain-meta mb-3">
+                                        <span class="label">Identified Country:</span>
+                                        <span class="value" id="phone-country">...</span>
+                                    </div>
+                                    <div class="alert-info mt-3">
+                                        <i class="fa-solid fa-lightbulb"></i>
+                                        <span>Check country code tables for regions outside standard listings.</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Phone Dorks -->
+                            <div class="card glass">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-search"></i>
+                                    <h4>Ecosystem Mentions Queries</h4>
+                                </div>
+                                <div class="card-body">
+                                    <p class="description">Queries to search directories, spreadsheets, or social profiles for number exposure:</p>
+                                    <div class="dorks-container" id="phone-dorks-container">
+                                        <!-- Populated via JS -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- TAB 6: DORK STUDIO -->
+                    <div class="tab-content" id="tab-dork">
+                        <div class="section-title">
+                            <h2>ONSINT Search Dorking Studio</h2>
+                            <p>Generate precise search engine parameters to uncover exposed directories, configs, log dumps, and employee lists.</p>
+                        </div>
+                        
+                        <div class="form-row row-flex">
+                            <div class="form-group flex-2">
+                                <label for="dork-target">Search Target Value</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa-solid fa-search input-icon-left"></i>
+                                    <input type="text" id="dork-target" placeholder="e.g. example.com or handle123" autocomplete="off" style="padding-left: 2.75rem;">
+                                </div>
+                            </div>
+                            
+                            <div class="form-group flex-1">
+                                <label for="dork-target-type">Target Profile Entity Type</label>
+                                <div class="select-wrapper">
+                                    <select id="dork-target-type">
+                                        <option value="domain">Web Domain (example.com)</option>
+                                        <option value="username">User Handle / Alias</option>
+                                        <option value="email">Email Address</option>
+                                        <option value="organization">Organization Name</option>
+                                    </select>
+                                    <i class="fa-solid fa-chevron-down select-chevron"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="btn-align-end">
+                                <button class="btn btn-gradient" id="btn-fetch-dorks" style="height: 43px; padding: 0 1.5rem; border-radius: 8px;">
+                                    <i class="fa-solid fa-terminal"></i> Build Queries
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="card glass mt-4" id="dorks-results-card" style="display: none;">
+                            <div class="card-header">
+                                <i class="fa-solid fa-list-ol"></i>
+                                <h4>Structured Google Dork Logs</h4>
+                            </div>
+                            <div class="card-body">
+                                <p class="description">Select a query template below. Copy to clipboard or open directly in a search window:</p>
+                                <div class="dorks-container" id="studio-dorks-container">
+                                    <!-- Populated via JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- TAB 7: CASE VAULT REPORTING -->
+                    <div class="tab-content" id="tab-vault">
+                        <div class="section-title">
+                            <h2>Investigation Case Vault</h2>
+                            <p>Review, download, and export collected evidence and records in standardized CSV format.</p>
+                        </div>
+                        
+                        <div class="vault-info-banner" id="vault-empty-banner">
+                            <i class="fa-solid fa-box-open banner-icon"></i>
+                            <h3>No Active Case File Linked</h3>
+                            <p>Select or create an active Case File in the left sidebar registry to display collected evidence logs.</p>
+                        </div>
+                        
+                        <div class="vault-data-frame" id="vault-data-frame" style="display: none;">
+                            <div class="vault-header-actions mb-3">
+                                <h3>Evidence Logs Matrix</h3>
+                                <button class="btn btn-gradient btn-sm" id="btn-download-csv">
+                                    <i class="fa-solid fa-download"></i> Download Evidence CSV Ledger
+                                </button>
+                            </div>
+                            
+                            <div class="card glass">
+                                <div class="table-wrapper">
+                                    <table class="data-table" id="vault-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Category</th>
+                                                <th>Intelligence Property</th>
+                                                <th>Recorded Audit Value</th>
+                                                <th>Logged Timestamp</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="vault-table-tbody">
+                                            <!-- Populated via JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- TAB 8: CONNECTION GRAPH -->
+                    <div class="tab-content" id="tab-graph">
+                        <div class="section-title">
+                            <h2>Interactive Entity Relationship Graph</h2>
+                            <p>Visualize visual connection nodes between targets, discovered handles, emails, domain servers, and IP endpoints.</p>
+                        </div>
+                        
+                        <div class="vault-info-banner" id="graph-empty-banner">
+                            <i class="fa-solid fa-circle-nodes banner-icon"></i>
+                            <h3>No Active Case File Linked</h3>
+                            <p>Select or create an active Case File in the left sidebar registry to construct the entity map.</p>
+                        </div>
+                        
+                        <div class="graph-data-frame" id="graph-data-frame" style="display: none;">
+                            <div class="vault-header-actions mb-3">
+                                <h3>Visual Entity Connection Diagram</h3>
+                                <button class="btn btn-secondary btn-sm" id="btn-refresh-graph">
+                                    <i class="fa-solid fa-arrows-rotate"></i> Recalculate Diagram
+                                </button>
+                            </div>
+                            
+                            <div class="card glass" style="padding: 0; overflow: hidden; position: relative;">
+                                <div id="network-graph" style="height: 550px; width: 100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </section>
+        </main>
+        
+    </div>
+    
+    <!-- Sidebar Overlay Backdrop -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- JavaScript file logic -->
+    <script src="/static/app.js"></script>
+</body>
+</html>
