@@ -1,6 +1,6 @@
 # ONSINT Core 🛰️
 
-[![Deploy to Render](https://render.com/images/deploy-to-render.svg)](https://render.com/deploy?repo=https://github.com/RonitGupta007/onsint-core)
+
 
 **ONSINT Core** is a general-purpose, self-hosted open-source intelligence (OSINT) suite designed for security analysts, penetration testers, and digital researchers. It provides a visual dashboard for target profiling, stealth network lookups, and connection-graph visualizers.
 
